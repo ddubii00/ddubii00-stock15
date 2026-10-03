@@ -12,7 +12,7 @@ class Config:
     api_id: int | None = field(default=None, repr=False)
     api_hash: str | None = field(default=None, repr=False)
     origin: str = 'https://localhost'
-    base_path: str = '/telegram-7'
+    base_path: str = '/stock15-7'
     session_seconds: int = 43200
 
     def __post_init__(self):
@@ -40,5 +40,5 @@ class Config:
             api_id=parsed_id,
             api_hash=os.getenv('TELEGRAM_API_HASH') or None,
             origin=os.getenv('APP_ORIGIN') or 'https://localhost',
-            base_path=os.getenv('APP_BASE_PATH', '/telegram-7').rstrip('/'),
+            base_path=os.getenv('APP_BASE_PATH', '/stock15-7').rstrip('/'),
         )

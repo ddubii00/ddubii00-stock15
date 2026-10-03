@@ -1,6 +1,6 @@
 # Telegram Reader
 
-내 Telegram 계정의 채널·그룹·개인대화를 한 화면에서 읽는 개인용 웹앱입니다. React + Vite + TypeScript, Python 3 + FastAPI + Telethon stable 1.x, SQLite로 구성합니다. Oracle Ubuntu에서 nginx의 HTTPS `/telegram-7/` 경로로 운영합니다.
+내 Telegram 계정의 채널·그룹·개인대화를 한 화면에서 읽는 개인용 웹앱입니다. React + Vite + TypeScript, Python 3 + FastAPI + Telethon stable 1.x, SQLite로 구성합니다. Oracle Ubuntu에서 nginx의 HTTPS `/stock15-7/` 경로로 운영합니다.
 
 메시지 보내기·수정·삭제·전달·읽음 처리·채널 가입/탈퇴 기능은 없습니다. X는 이 앱에서 숨기는 동작이며 Telegram 원본은 변경하지 않습니다. OpenAI API, AI 요약, 유료 DB, Redis, analytics는 사용하지 않습니다.
 
@@ -12,7 +12,7 @@
 - SQLite의 선택·숨김·조회 시작일을 모든 기기가 공유합니다. 열린 화면은 15초마다 메타데이터만 확인하고 변경 시 피드를 다시 조회합니다.
 - 오늘 날짜에서만 새로고침과 60초 자동 새로고침을 제공합니다. 자동 새로고침은 끌 수 있고 비활성 탭에서는 호출하지 않습니다.
 - Telemoa 인기 종목 6개와 핵심 블로그 6개를 표시합니다. 최신/누적 전환, 언급/스크랩 수, 원문 링크, 출처와 조회시간을 표시합니다. 목록은 60초 메모리 캐시만 사용하며 원문 블로그 전문을 복제하지 않습니다. 이 영역은 선택한 개인 Telegram 대화와 별도이며 Telegram 비밀정보를 Telemoa에 보내지 않습니다. Telemoa 공개 API 형식이 바뀌거나 접근이 제한되면 오류와 원문 링크를 표시합니다.
-- `기록삭제`: 확인창 후 선택 대화방, 숨김 ID, 설정, 모든 웹 로그인 세션을 삭제하고 SQLite의 빈 페이지를 정리합니다. 조회 시작일은 오늘로 돌아갑니다. Telegram 인증 session과 `/etc/telegram-reader.env`는 유지합니다. 소스, Telegram 원본, 별도의 백업은 삭제하지 않습니다.
+- `기록삭제`: 확인창 후 선택 대화방, 숨김 ID, 설정, 모든 웹 로그인 세션을 삭제하고 SQLite의 빈 페이지를 정리합니다. 조회 시작일은 오늘로 돌아갑니다. Telegram 인증 session과 `/etc/stock15-7.env`는 유지합니다. 소스, Telegram 원본, 별도의 백업은 삭제하지 않습니다.
 
 ## 보안과 저장 정책
 
@@ -20,22 +20,22 @@
 
 - 실제 secret은 사용자가 Oracle에서 직접 입력합니다. 코드, fixture, README, Git history에 실제 값을 넣지 않습니다. `.env.example`에는 값 없이 변수 이름만 있습니다.
 - Telegram 인증 session: `/var/lib/telegram-reader/session/telegram.session`, 전용 사용자 소유, `600`. 디렉터리 `700`.
-- 환경변수: `/etc/telegram-reader.env`, root 소유 `600`. systemd가 읽어 전용 사용자 프로세스에 전달합니다.
+- 환경변수: `/etc/stock15-7.env`, root 소유 `600`. systemd가 읽어 전용 사용자 프로세스에 전달합니다.
 - 설정 DB: `/var/lib/telegram-reader/app.sqlite3`, 전용 사용자 소유 `600`.
-- 웹 쿠키: HttpOnly, Secure, SameSite=Strict, 경로 `/telegram-7/`, 유효기간 12시간. 비밀번호나 메시지를 localStorage/IndexedDB에 저장하지 않습니다. 비밀번호는 로그인 요청 중에만 메모리에 있으며 즉시 입력칸을 비웁니다.
+- 웹 쿠키: HttpOnly, Secure, SameSite=Strict, 경로 `/stock15-7/`, 유효기간 12시간. 비밀번호나 메시지를 localStorage/IndexedDB에 저장하지 않습니다. 비밀번호는 로그인 요청 중에만 메모리에 있으며 즉시 입력칸을 비웁니다.
 - 로그인 Origin 검사와 변경 요청의 Origin + CSRF 검사를 합니다. `APP_ORIGIN`은 HTTPS origin이고 끝에 경로를 붙이지 않습니다. 비밀번호는 최소 12자이며 설정되지 않으면 서버 시작을 거부합니다.
 - APP_PASSWORD는 메모리에서 scrypt 검증합니다. 웹 세션 토큰 원문은 DB에 넣지 않고 SHA-256 해시만 저장합니다. 서비스 재시작/비밀번호 변경은 모든 웹 로그인을 무효화합니다. 프로세스는 **1 worker**만 실행합니다.
 - 메시지 본문/작성자/캡션/미디어는 SQLite, 파일, 브라우저 저장소, analytics에 저장하지 않습니다. 미디어는 다운로드하지 않고 종류만 표시합니다. Telegram 결과는 해당 요청의 메모리에서만 처리합니다.
 - Telethon entity 디스크 저장을 끄고, 조회에 필요한 input peer/access_hash는 대화방 조회 결과에서 메모리로만 보관합니다. Telethon 인증 session은 메시지 DB가 아닙니다.
 - 모든 응답 `Cache-Control: no-store`. nginx 캐시, 요청/응답 임시파일 buffering, access log를 끕니다. Telethon 계정 정보가 포함될 수 있는 로그를 비활성화합니다. API body debug log를 남기지 않습니다.
-- 일반 소스 백업에 `/etc/telegram-reader.env`, `/var/lib/telegram-reader`, Telegram session을 포함하지 마세요. 앱의 기록삭제는 별도 백업/OS snapshot까지 지우지 않습니다. OS swap/core dump로 메모리가 디스크에 기록되지 않게 Oracle의 swap 정책도 확인하세요. systemd의 core dump 제한은 0입니다.
+- 일반 소스 백업에 `/etc/stock15-7.env`, `/var/lib/telegram-reader`, Telegram session을 포함하지 마세요. 앱의 기록삭제는 별도 백업/OS snapshot까지 지우지 않습니다. OS swap/core dump로 메모리가 디스크에 기록되지 않게 Oracle의 swap 정책도 확인하세요. systemd의 core dump 제한은 0입니다.
 
 ## 구조
 
 ```text
-HTTPS browser /telegram-7/
+HTTPS browser /stock15-7/
   → nginx (subpath 제거, cache/buffering 없음)
-    → FastAPI 127.0.0.1:8017, root_path=/telegram-7
+    → FastAPI 127.0.0.1:8017, root_path=/stock15-7
       ├─ React production build 정적 제공
       ├─ 서버 웹 세션 + CSRF
       ├─ Telethon → Telegram MTProto history 조회
@@ -87,13 +87,13 @@ npm run build
 cd ..
 ```
 
-Vite base와 Python APP_BASE_PATH 기본값은 `/telegram-7/`입니다. 변경할 때 두 설정과 nginx location을 함께 바꿉니다. 모든 frontend API 요청은 공통 `apiUrl()` helper를 사용합니다.
+Vite base와 Python APP_BASE_PATH 기본값은 `/stock15-7/`입니다. 변경할 때 두 설정과 nginx location을 함께 바꿉니다. 모든 frontend API 요청은 공통 `apiUrl()` helper를 사용합니다.
 
-### 5. `/etc/telegram-reader.env` 사용자가 직접 생성
+### 5. `/etc/stock15-7.env` 사용자가 직접 생성
 
 ```bash
-sudo install -m 600 -o root -g root /dev/null /etc/telegram-reader.env
-sudo nano /etc/telegram-reader.env
+sudo install -m 600 -o root -g root /dev/null /etc/stock15-7.env
+sudo nano /etc/stock15-7.env
 ```
 
 아래 변수 이름을 입력합니다. 비밀값은 문서에 쓰지 않습니다.
@@ -118,13 +118,13 @@ TZ=
 
 - TELEGRAM_SESSION_PATH: `/var/lib/telegram-reader/session/telegram.session`
 - APP_DB_PATH: `/var/lib/telegram-reader/app.sqlite3`
-- APP_ORIGIN: 실제 `https://도메인` (끝의 `/`와 `/telegram-7/` 제외)
-- APP_BASE_PATH: `/telegram-7`
+- APP_ORIGIN: 실제 `https://도메인` (끝의 `/`와 `/stock15-7/` 제외)
+- APP_BASE_PATH: `/stock15-7`
 - TZ: `Asia/Seoul`
 
 ```bash
-sudo chown root:root /etc/telegram-reader.env
-sudo chmod 600 /etc/telegram-reader.env
+sudo chown root:root /etc/stock15-7.env
+sudo chmod 600 /etc/stock15-7.env
 ```
 
 ### 7. `scripts/telegram_login.py` 실행
@@ -136,7 +136,7 @@ sudo install -d -m 700 -o telegram-reader -g telegram-reader /var/lib/telegram-r
 sudo systemd-run --collect --wait --pty \
   --uid=telegram-reader --gid=telegram-reader \
   --working-directory=/var/www/telegram-reader \
-  --property=EnvironmentFile=/etc/telegram-reader.env \
+  --property=EnvironmentFile=/etc/stock15-7.env \
   --property=UMask=0077 \
   /var/www/telegram-reader/.venv/bin/python scripts/telegram_login.py
 ```
@@ -205,11 +205,11 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-FastAPI는 127.0.0.1:8017에서만 대기합니다. Oracle/Ubuntu 방화벽에서 8017을 외부에 열지 않습니다. `/telegram-7`은 `/telegram-7/`로 redirect됩니다. `proxy_pass http://127.0.0.1:8017/;`의 마지막 slash를 유지하세요.
+FastAPI는 127.0.0.1:8017에서만 대기합니다. Oracle/Ubuntu 방화벽에서 8017을 외부에 열지 않습니다. `/stock15-7`은 `/stock15-7/`로 redirect됩니다. `proxy_pass http://127.0.0.1:8017/;`의 마지막 slash를 유지하세요.
 
 ### 15. 브라우저 접속
 
-최종 주소: **`https://실제-Oracle-도메인/telegram-7/`**
+최종 주소: **`https://실제-Oracle-도메인/stock15-7/`**
 
 웹앱 비밀번호로 로그인 → 대화방 선택 → 적용. 기본 조회 시작일은 첫 실행의 오늘 KST 날짜이며 설정에서 이전 날짜로 바꿀 수 있습니다. 실제 Oracle 도메인은 아직 전달받지 않았으므로 공개 배포 주소를 확정하지 않았습니다.
 
@@ -248,7 +248,7 @@ CLI에서만 send_code_request/sign_in 인증을 합니다. 웹 서버는 connec
 
 ## API
 
-외부에서는 모든 경로 앞에 `/telegram-7`을 붙입니다.
+외부에서는 모든 경로 앞에 `/stock15-7`을 붙입니다.
 
 ```text
 POST   /api/auth/login
@@ -288,7 +288,7 @@ npm ci
 npm run dev
 ```
 
-접속: `http://127.0.0.1:5173/telegram-7/?demo=1`. 로컬 공개 데이터 preview 서버는 127.0.0.1:8015이며 운영 systemd에서는 실행하지 않습니다. 실제 Telegram 사용 환경은 HTTPS의 production build를 이용하세요.
+접속: `http://127.0.0.1:5173/stock15-7/?demo=1`. 로컬 공개 데이터 preview 서버는 127.0.0.1:8015이며 운영 systemd에서는 실행하지 않습니다. 실제 Telegram 사용 환경은 HTTPS의 production build를 이용하세요.
 
 ```bash
 cd frontend

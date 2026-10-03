@@ -11,7 +11,7 @@ from backend.app.time_utils import date_bounds, require_aware
 from backend.app.telegram import TelegramLimited, TelegramReader, TelegramUnavailable
 from .conftest import FakeTelegram, sign_in
 
-PREFIX = '/telegram-7/api'
+PREFIX = '/stock15-7/api'
 
 
 @pytest.mark.parametrize('method,path,body', [
@@ -34,7 +34,7 @@ def test_cookie_password_and_csrf(rig):
     assert client.post(PREFIX + '/auth/login', json={'password': password}, headers={'Origin': 'https://attacker.test'}).status_code == 403
     result = client.post(PREFIX + '/auth/login', json={'password': password}, headers={'Origin': 'https://reader.test'})
     cookie = result.headers['set-cookie'].lower()
-    assert all(item in cookie for item in ('httponly', 'secure', 'samesite=strict', 'path=/telegram-7/'))
+    assert all(item in cookie for item in ('httponly', 'secure', 'samesite=strict', 'path=/stock15-7/'))
     assert client.get(PREFIX + '/settings').status_code == 200
     assert client.put(PREFIX + '/settings/chats', json={'chatIds': []}, headers={'Origin': 'https://reader.test'}).status_code == 403
     assert client.put(PREFIX + '/settings/chats', json={'chatIds': []}, headers={'Origin': 'https://attacker.test', 'X-CSRF-Token': result.json()['csrfToken']}).status_code == 403
@@ -210,10 +210,10 @@ def test_missing_real_telegram_auth_has_safe_status(rig):
 
 def test_subpath_assets_auth_gate_and_security_headers(authenticated):
     _, client, _, _, _ = authenticated
-    index = client.get('/telegram-7/')
+    index = client.get('/stock15-7/')
     assert index.status_code == 200
-    assert '/telegram-7/assets/' in index.text
+    assert '/stock15-7/assets/' in index.text
     assert "frame-ancestors 'none'" in index.headers['content-security-policy']
     assert index.headers['cache-control'] == 'no-store'
-    assert client.get('/telegram-7/api/auth/session').status_code == 200
-    assert client.get('/telegram-7/api/does-not-exist').status_code == 404
+    assert client.get('/stock15-7/api/auth/session').status_code == 200
+    assert client.get('/stock15-7/api/does-not-exist').status_code == 404

@@ -77,7 +77,7 @@ def rig(tmp_path, monkeypatch):
 
 
 def sign_in(client, password):
-    response = client.post('/telegram-7/api/auth/login', json={'password': password}, headers={'Origin': 'https://reader.test'})
+    response = client.post('/stock15-7/api/auth/login', json={'password': password}, headers={'Origin': 'https://reader.test'})
     assert response.status_code == 200
     return {'Origin': 'https://reader.test', 'X-CSRF-Token': response.json()['csrfToken']}
 

@@ -8,7 +8,7 @@ Type=simple
 User=telegram-reader
 Group=telegram-reader
 WorkingDirectory=/var/www/telegram-reader
-EnvironmentFile=/etc/telegram-reader.env
+EnvironmentFile=/etc/stock15-7.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/var/www/telegram-reader/.venv/bin/uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8017 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log --log-level warning
 Restart=on-failure
