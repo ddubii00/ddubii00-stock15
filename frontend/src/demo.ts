@@ -12,7 +12,7 @@ export function installDemo() {
     { chatId: '-1005', title: '주말 읽을거리', type: 'channel', selected: false },
     { chatId: '1006', title: '개인 대화 예시', type: 'private', selected: false },
   ];
-  let settings: Settings = { selectedChatIds: chats.filter(c => c.selected).map(c => c.chatId), historyStartDate: `${day.slice(0, 8)}01`, hiddenCount: 0, today: day };
+  let settings: Settings = { selectedChatIds: chats.filter(c => c.selected).map(c => c.chatId), historyStartDate: `${day.slice(0, 8)}01`, hiddenCount: 0, revision: '0', today: day };
   let hidden: Hidden[] = [];
   const texts = [
     '오늘 시장을 읽는 세 가지 질문\n\n1. 금리의 방향보다 변화 속도를 보고 있나요?\n2. 기업의 성장과 가격에 반영된 기대를 구분하고 있나요?\n3. 단기 뉴스와 장기 투자 가설이 연결되어 있나요?\n\n주말에는 한 주의 기록을 차분하게 돌아보세요. 다음 주를 준비하는 데 좋은 출발점이 됩니다.',
@@ -34,18 +34,23 @@ export function installDemo() {
     if (path.startsWith('auth/')) data = { csrfToken: 'preview-only' };
     else if (path === 'status') data = { telegram: 'connected', selectedCount: settings.selectedChatIds.length, hiddenCount: hidden.length, dbBytes: 32768, messagePersistence: false, timezone: 'Asia/Seoul', today: day };
     else if (path === 'chats') data = chats.map(c => ({ ...c, selected: settings.selectedChatIds.includes(c.chatId) }));
-    else if (path === 'settings/chats') { settings.selectedChatIds = body.chatIds; data = settings; }
-    else if (path === 'settings/start-date') { settings.historyStartDate = body.date; data = settings; }
+    else if (path === 'settings/chats') { settings.selectedChatIds = body.chatIds; settings.revision = String(Number(settings.revision) + 1); data = settings; }
+    else if (path === 'settings/start-date') { settings.historyStartDate = body.date; settings.revision = String(Number(settings.revision) + 1); data = settings; }
     else if (path === 'settings') data = { ...settings, hiddenCount: hidden.length };
     else if (path === 'messages') {
       let items = messages.filter(m => m.timestamp.startsWith(url.searchParams.get('date') || day) && settings.selectedChatIds.includes(m.chatId) && !hidden.some(h => h.chat_id === m.chatId && h.message_id === m.messageId));
-      if (url.searchParams.get('chat_id')) items = items.filter(m => m.chatId === url.searchParams.get('chat_id'));
+      const ids = url.searchParams.getAll('chat_id');
+      if (ids.length) items = items.filter(m => ids.includes(m.chatId));
       if (url.searchParams.get('order') === 'asc') items = [...items].reverse();
       data = { messages: items, nextCursor: null, unavailableChatIds: [] };
-    } else if (path === 'messages/hide') hidden.push({ chat_id: body.chatId, message_id: body.messageId, hidden_at: new Date().toISOString() });
+    } else if (path === 'messages/hide') {
+      if (!hidden.some(h => h.chat_id === body.chatId && h.message_id === body.messageId)) hidden.push({ chat_id: body.chatId, message_id: body.messageId, hidden_at: new Date().toISOString() });
+      settings = { ...settings, hiddenCount: hidden.length, revision: String(Number(settings.revision) + 1) };
+      data = settings;
+    }
     else if (path === 'messages/hidden') data = { items: hidden.slice(Number(url.searchParams.get('offset')) || 0, (Number(url.searchParams.get('offset')) || 0) + 100), total: hidden.length };
-    else if (path === 'messages/hide-all') hidden = [];
-    else if (path.startsWith('messages/hide/')) hidden = hidden.filter(h => `${h.chat_id}/${h.message_id}` !== path.replace('messages/hide/', ''));
+    else if (path === 'messages/hide-all') { hidden = []; settings.revision = String(Number(settings.revision) + 1); }
+    else if (path.startsWith('messages/hide/')) { hidden = hidden.filter(h => `${h.chat_id}/${h.message_id}` !== path.replace('messages/hide/', '')); settings.revision = String(Number(settings.revision) + 1); }
     else if (path === 'settings/records') { hidden = []; settings = { ...settings, selectedChatIds: [], historyStartDate: day }; }
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   };

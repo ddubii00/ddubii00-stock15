@@ -87,6 +87,43 @@ def test_kst_exact_date_bounds_and_no_naive_datetime():
         require_aware(datetime(2026, 10, 3))
 
 
+def test_multi_chat_filter_paginates_only_enabled_rooms(authenticated):
+    _, client, headers, fake, _ = authenticated
+    client.put(PREFIX + '/settings/chats', json={'chatIds': ['-1001', '-1002', '1003']}, headers=headers)
+    query = PREFIX + '/messages?date=2026-10-03&chat_id=-1001&chat_id=-1002&limit=1'
+    messages = []
+    cursor = None
+    for _ in range(10):
+        page = client.get(query + ('&cursor=' + cursor if cursor else ''))
+        assert page.status_code == 200
+        result = page.json()
+        messages.extend(result['messages'])
+        cursor = result['nextCursor']
+        if cursor is None:
+            break
+    assert cursor is None
+    assert [(m['chatId'], m['messageId']) for m in messages] == [('-1001', 4), ('-1002', 10), ('-1001', 3), ('-1001', 2)]
+    assert {call[0] for call in fake.calls} == {'-1001', '-1002'}
+    assert client.get(query + '&chat_id=99999').status_code == 403
+    assert client.get(query + '&chat_id=bad').status_code == 422
+    assert client.get(query + '&chat_id=-1001').json()['messages'][0]['messageId'] == 4
+
+
+def test_hide_acknowledges_settings_without_telegram_scan(authenticated):
+    _, client, headers, fake, _ = authenticated
+    client.put(PREFIX + '/settings/chats', json={'chatIds': ['-1001']}, headers=headers)
+    first = client.get(PREFIX + '/messages?date=2026-10-03&limit=1').json()
+    scans = len(fake.calls)
+    previous = client.get(PREFIX + '/settings').json()
+    result = client.post(PREFIX + '/messages/hide', json={'chatId': '-1001', 'messageId': 4}, headers=headers).json()
+    assert result['hiddenCount'] == 1
+    assert int(result['revision']) == int(previous['revision']) + 1
+    assert result['selectedChatIds'] == ['-1001']
+    assert len(fake.calls) == scans
+    remaining = client.get(PREFIX + '/messages', params={'date': '2026-10-03', 'cursor': first['nextCursor']}).json()
+    assert [m['messageId'] for m in remaining['messages']] == [3, 2]
+
+
 @pytest.mark.parametrize('order', ['asc', 'desc'])
 def test_date_filter_and_pagination_have_no_gaps(authenticated, order):
     _, client, headers, _, _ = authenticated

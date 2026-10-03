@@ -160,7 +160,7 @@ def create_app(config: Config | None = None, telegram=None):
         return {'ok': True, 'telegramSessionPreserved': True}
 
     @app.get('/api/messages', dependencies=secured)
-    async def messages(date: date, order: Literal['asc', 'desc'] = 'desc', chat_id: ChatId | None = None, cursor: Annotated[str | None, Query(max_length=20000)] = None, limit: Annotated[int, Query(ge=1, le=100)] = 50):
+    async def messages(date: date, order: Literal['asc', 'desc'] = 'desc', chat_id: Annotated[list[ChatId] | None, Query(max_length=200)] = None, cursor: Annotated[str | None, Query(max_length=20000)] = None, limit: Annotated[int, Query(ge=1, le=100)] = 50):
         if date > today_kst():
             raise HTTPException(400, '미래 날짜는 조회할 수 없습니다.')
         return await feed.page(date, order, chat_id, cursor, limit)
@@ -170,7 +170,7 @@ def create_app(config: Config | None = None, telegram=None):
         if body.chatId not in db.settings()['selectedChatIds']:
             raise HTTPException(403, '선택된 대화방만 숨길 수 있습니다.')
         db.hide(body.chatId, body.messageId)
-        return {'ok': True}
+        return {**db.settings(), 'today': today_kst().isoformat()}
 
     @app.get('/api/messages/hidden', dependencies=secured)
     async def hidden(offset: Annotated[int, Query(ge=0)] = 0):

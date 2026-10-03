@@ -34,16 +34,16 @@ class Feed:
         except (ValueError, TypeError, KeyError):
             raise HTTPException(400, '조회 페이지가 만료되었습니다. 날짜를 다시 조회해 주세요.') from None
 
-    async def page(self, day: date, order: str, chat_id: str | None, cursor: str | None, limit: int):
+    async def page(self, day: date, order: str, chat_id: list[str] | None, cursor: str | None, limit: int):
         async with self.lock:
             settings = self.db.settings()
             if day < date.fromisoformat(settings['historyStartDate']):
                 raise HTTPException(400, '대화 조회 시작일보다 이전 날짜는 조회할 수 없습니다.')
             selected = settings['selectedChatIds']
             if chat_id:
-                if chat_id not in selected:
+                if any(cid not in selected for cid in chat_id):
                     raise HTTPException(403, '선택된 대화방만 조회할 수 있습니다.')
-                selected = [chat_id]
+                selected = [cid for cid in selected if cid in chat_id]
             context = {'date': day.isoformat(), 'order': order, 'ids': selected, 'start': settings['historyStartDate']}
             previous = self.decode(cursor) if cursor else None
             if previous and previous.get('context') != context:
