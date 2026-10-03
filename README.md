@@ -29,7 +29,7 @@
 - 로그인 Origin 검사와 변경 요청의 Origin + CSRF 검사를 합니다. `APP_ORIGIN`은 HTTPS origin이고 끝에 경로를 붙이지 않습니다. 비밀번호는 최소 4자이며 설정되지 않으면 서버 시작을 거부합니다.
 - APP_PASSWORD는 메모리에서 scrypt 검증합니다. 웹 세션 토큰 원문은 DB에 넣지 않고 SHA-256 해시만 저장합니다. 서비스 재시작/비밀번호 변경은 모든 웹 로그인을 무효화합니다. 프로세스는 **1 worker**만 실행합니다.
 - 메시지 본문/작성자/캡션/첨부 파일은 SQLite, 파일, 브라우저 저장소, analytics에 저장하지 않습니다. 사진·동영상·PDF가 있을 때만 각각 `사진`, `동영상`, `PDF` 버튼을 표시합니다. 버튼을 누르면 새 창에서 Telegram 첨부 파일을 스트리밍해 보며 Oracle에는 임시·영구 파일을 만들지 않습니다.
-- 본문에 있는 외부 링크는 새 창으로 엽니다. 대화방 선택·설정·기록삭제 대화창은 창 자체를 더블클릭해 닫을 수 있습니다.
+- 본문에 있는 외부 링크는 새 창으로 엽니다. 메시지 카드의 어느 부분이든 더블클릭하면 X 버튼과 같은 숨김 동작을 실행합니다.
 - Telethon entity 디스크 저장을 끄고, 조회에 필요한 input peer/access_hash는 대화방 조회 결과에서 메모리로만 보관합니다. Telethon 인증 session은 메시지 DB가 아닙니다.
 - 모든 응답 `Cache-Control: no-store`. nginx 캐시, 요청/응답 임시파일 buffering, access log를 끕니다. Telethon 계정 정보가 포함될 수 있는 로그를 비활성화합니다. API body debug log를 남기지 않습니다.
 - 일반 소스 백업에 `/etc/stock15-7.env`, `/var/lib/stock15-7`, Telegram session을 포함하지 마세요. 앱의 기록삭제는 별도 백업/OS snapshot까지 지우지 않습니다. OS swap/core dump로 메모리가 디스크에 기록되지 않게 Oracle의 swap 정책도 확인하세요. systemd의 core dump 제한은 0입니다.
