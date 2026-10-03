@@ -22,6 +22,7 @@ def test_serialization_kst_caption_forward_and_safe_links():
     result = serialize_message(msg, chat)
     assert result['timestamp'] == '2026-10-03T00:01:00+09:00'
     assert result['text'] == text and result['media'] == '사진' and result['forwarded']
+    assert result['attachment'] == {'label': '사진'}
     assert result['sender'] == '합성 작성자'
     assert result['links'] == ['https://telegram.org']
 

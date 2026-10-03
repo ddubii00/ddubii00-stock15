@@ -4,6 +4,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import AsyncIterator
 
 from telethon import TelegramClient, errors, utils
 from telethon.tl import types
@@ -40,6 +41,15 @@ class Scan:
     last_key: tuple | None = None
 
 
+@dataclass
+class MediaDownload:
+    label: str
+    filename: str
+    content_type: str
+    inline: bool
+    chunks: AsyncIterator[bytes]
+
+
 def safe_url(value: str) -> str | None:
     from urllib.parse import urlsplit
     try:
@@ -47,6 +57,29 @@ def safe_url(value: str) -> str | None:
         return value if parsed.scheme.lower() in ('https', 'http') and parsed.netloc else None
     except ValueError:
         return None
+
+
+def media_label(message) -> str | None:
+    if getattr(message, 'photo', None):
+        return '사진'
+    if getattr(message, 'video', None):
+        return '동영상'
+    if getattr(message, 'voice', None):
+        return '음성'
+    if getattr(message, 'sticker', None):
+        return '스티커'
+    if getattr(message, 'document', None):
+        return '파일'
+    if isinstance(getattr(message, 'media', None), types.MessageMediaPoll):
+        return '투표'
+    if getattr(message, 'media', None) and not isinstance(message.media, types.MessageMediaWebPage):
+        return '미디어'
+    return None
+
+
+def attachment_label(message) -> str | None:
+    label = media_label(message)
+    return label if label and label not in ('투표', '미디어') else None
 
 
 def serialize_message(message, chat: Chat):
@@ -67,26 +100,14 @@ def serialize_message(message, chat: Chat):
                 url = 'https://' + url
         if url and (valid := safe_url(url)) and valid not in links:
             links.append(valid)
-    media = None
-    if getattr(message, 'photo', None):
-        media = '사진'
-    elif getattr(message, 'video', None):
-        media = '동영상'
-    elif getattr(message, 'voice', None):
-        media = '음성'
-    elif getattr(message, 'sticker', None):
-        media = '스티커'
-    elif getattr(message, 'document', None):
-        media = '파일'
-    elif isinstance(getattr(message, 'media', None), types.MessageMediaPoll):
-        media = '투표'
-    elif getattr(message, 'media', None) and not isinstance(message.media, types.MessageMediaWebPage):
-        media = '미디어'
+    media = media_label(message)
+    attachment = attachment_label(message)
     timestamp = require_aware(message.date).astimezone(KST)
     return {
         'chatId': chat.chat_id, 'chatTitle': chat.title, 'messageId': message.id,
         'sender': sender_name, 'timestamp': timestamp.isoformat(), 'text': text,
         'links': links, 'forwarded': bool(message.fwd_from), 'media': media,
+        'attachment': {'label': attachment} if attachment else None,
     }
 
 
@@ -204,3 +225,42 @@ class TelegramReader:
                 raise TelegramLimited(exc.seconds) from None
             except (errors.RPCError, OSError, TimeoutError, ValueError):
                 raise TelegramUnavailable() from None
+
+    async def media_stream(self, chat_id: str, message_id: int) -> MediaDownload | None:
+        """Read a Telegram attachment into the HTTP response only; never write a file."""
+        chats = await self.dialogs()
+        chat = chats.get(chat_id)
+        if not chat:
+            return None
+        try:
+            async with self.semaphore:
+                self.check_cooldown()
+                async with asyncio.timeout(30):
+                    message = await self.client.get_messages(chat.entity, ids=message_id)
+            label = attachment_label(message) if message else None
+            if not label:
+                return None
+            file = message.file
+            content_type = getattr(file, 'mime_type', None) or ('image/jpeg' if label == '사진' else 'application/octet-stream')
+            extension = getattr(file, 'ext', None) or ('.jpg' if label == '사진' else '')
+            filename = getattr(file, 'name', None) or f'telegram-{chat_id}-{message_id}{extension}'
+            inline = content_type == 'application/pdf' or content_type.startswith(('image/', 'video/', 'audio/'))
+
+            async def chunks():
+                try:
+                    async with self.semaphore:
+                        async with asyncio.timeout(300):
+                            async for chunk in self.client.iter_download(message.media, request_size=64 * 1024):
+                                yield chunk
+                except errors.FloodWaitError as exc:
+                    self.cooldown_until = time.monotonic() + exc.seconds
+                    raise TelegramLimited(exc.seconds) from None
+                except (errors.RPCError, OSError, TimeoutError, ValueError):
+                    raise TelegramUnavailable() from None
+
+            return MediaDownload(label, filename, content_type, inline, chunks())
+        except errors.FloodWaitError as exc:
+            self.cooldown_until = time.monotonic() + exc.seconds
+            raise TelegramLimited(exc.seconds) from None
+        except (errors.RPCError, OSError, TimeoutError, ValueError):
+            raise TelegramUnavailable() from None

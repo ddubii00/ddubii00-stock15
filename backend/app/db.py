@@ -54,6 +54,7 @@ class Database:
             db.executescript(SCHEMA)
             db.execute('INSERT OR IGNORE INTO app_settings VALUES (?, ?)', ('history_start_date', today_kst().isoformat()))
             db.execute('INSERT OR IGNORE INTO app_settings VALUES (?, ?)', ('state_revision', '0'))
+            db.execute('INSERT OR IGNORE INTO app_settings VALUES (?, ?)', ('theme', 'light'))
 
     @contextmanager
     def connection(self):
@@ -72,7 +73,8 @@ class Database:
             ids = [r[0] for r in db.execute('SELECT chat_id FROM selected_chats WHERE enabled=1 ORDER BY sort_order, chat_id')]
             count = db.execute('SELECT COUNT(*) FROM hidden_messages').fetchone()[0]
             revision = db.execute('SELECT value FROM app_settings WHERE key=?', ('state_revision',)).fetchone()[0]
-        return {'historyStartDate': day, 'selectedChatIds': ids, 'hiddenCount': count, 'revision': revision}
+            theme = db.execute('SELECT value FROM app_settings WHERE key=?', ('theme',)).fetchone()[0]
+        return {'historyStartDate': day, 'selectedChatIds': ids, 'hiddenCount': count, 'revision': revision, 'theme': theme}
 
     @staticmethod
     def bump(db):
@@ -87,6 +89,11 @@ class Database:
     def set_start_date(self, day: str):
         with self.connection() as db:
             db.execute('UPDATE app_settings SET value=? WHERE key=?', (day, 'history_start_date'))
+            self.bump(db)
+
+    def set_theme(self, theme: str):
+        with self.connection() as db:
+            db.execute('UPDATE app_settings SET value=? WHERE key=?', (theme, 'theme'))
             self.bump(db)
 
     def hide(self, chat_id: str, message_id: int):
@@ -111,6 +118,7 @@ class Database:
                 db.execute(f'DELETE FROM {table}')
             db.execute('INSERT INTO app_settings VALUES (?, ?)', ('history_start_date', today_kst().isoformat()))
             db.execute('INSERT INTO app_settings VALUES (?, ?)', ('state_revision', '0'))
+            db.execute('INSERT INTO app_settings VALUES (?, ?)', ('theme', 'light'))
         with self.connection() as db:
             db.execute('VACUUM')
 

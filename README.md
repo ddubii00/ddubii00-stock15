@@ -10,9 +10,9 @@
 - 오늘 KST 날짜 기본 조회, 날짜 picker, 더 보기. `시간순`은 최신 메시지부터 표시하고, `대화방순`은 대화방 이름순으로 묶어 각 방 안에서는 최신 메시지부터 표시합니다. 정렬 전환은 추가 Telegram 조회 없이 즉시 적용됩니다.
 - `선택한 대화방`을 클릭하면 해당 방만 표시합니다. 다른 방을 클릭하면 함께 표시하고, 같은 방을 다시 클릭하면 표시에서 제외합니다. 마지막 방을 해제하면 빈 피드가 되고 `전체 피드`를 누르면 등록된 방을 모두 표시합니다. 표시 필터는 현재 화면에만 적용되며 서버의 대화방 등록 목록은 유지합니다.
 - X는 클릭 즉시 메시지를 화면에서 숨기고 ID 저장을 뒤에서 처리합니다. 저장 실패 시 메시지를 복원하고 오류를 표시합니다. 저장 성공 시 전체 피드를 다시 조회하지 않으며, 진행 중이던 조회 응답에도 숨김을 적용합니다. 다른 기기의 변경은 기존 15초 확인/창 포커스 동기화를 유지합니다.
-- `밝음`/`어두움` 버튼으로 배경, 메시지 카드, 사이드바, 설정창의 색을 전환합니다. 기본값은 밝음이며 표시 필터와 색상은 브라우저 저장소에 기록하지 않습니다.
+- `밝음`/`어두움` 버튼으로 배경, 메시지 카드, 사이드바, 설정창의 색을 전환합니다. 테마는 Oracle의 최소 설정 DB에 저장되어 다음 로그인과 다른 컴퓨터에도 적용됩니다. 표시 필터는 브라우저 저장소에 기록하지 않습니다.
 - 웹앱 비밀번호 로그인, 서버 쿠키, CSRF, 로그인 시도 제한.
-- SQLite의 선택·숨김·조회 시작일을 모든 기기가 공유합니다. 열린 화면은 15초마다 메타데이터만 확인하고 변경 시 피드를 다시 조회합니다.
+- SQLite의 선택·숨김·조회 시작일·테마를 모든 기기가 공유합니다. 열린 화면은 15초마다 메타데이터만 확인하며, 피드에 영향을 주는 변경에만 다시 조회합니다.
 - 오늘 날짜에서만 새로고침과 60초 자동 새로고침을 제공합니다. 자동 새로고침은 끌 수 있고 비활성 탭에서는 호출하지 않습니다.
 - Telemoa 인기 종목 6개와 핵심 블로그 6개를 표시합니다. 최신/누적 전환, 언급/스크랩 수, 원문 링크, 출처와 조회시간을 표시합니다. 목록은 60초 메모리 캐시만 사용하며 원문 블로그 전문을 복제하지 않습니다. 이 영역은 선택한 개인 Telegram 대화와 별도이며 Telegram 비밀정보를 Telemoa에 보내지 않습니다. Telemoa 공개 API 형식이 바뀌거나 접근이 제한되면 오류와 원문 링크를 표시합니다.
 - `기록삭제`: 확인창 후 선택 대화방, 숨김 ID, 설정, 모든 웹 로그인 세션을 삭제하고 SQLite의 빈 페이지를 정리합니다. 조회 시작일은 오늘로 돌아갑니다. Telegram 인증 session과 `/etc/stock15-7.env`는 유지합니다. 소스, Telegram 원본, 별도의 백업은 삭제하지 않습니다.
@@ -28,7 +28,7 @@
 - 웹 쿠키: HttpOnly, Secure, SameSite=Strict, 경로 `/stock15-7/`, 유효기간 12시간. 비밀번호나 메시지를 localStorage/IndexedDB에 저장하지 않습니다. 비밀번호는 로그인 요청 중에만 메모리에 있으며 즉시 입력칸을 비웁니다.
 - 로그인 Origin 검사와 변경 요청의 Origin + CSRF 검사를 합니다. `APP_ORIGIN`은 HTTPS origin이고 끝에 경로를 붙이지 않습니다. 비밀번호는 최소 4자이며 설정되지 않으면 서버 시작을 거부합니다.
 - APP_PASSWORD는 메모리에서 scrypt 검증합니다. 웹 세션 토큰 원문은 DB에 넣지 않고 SHA-256 해시만 저장합니다. 서비스 재시작/비밀번호 변경은 모든 웹 로그인을 무효화합니다. 프로세스는 **1 worker**만 실행합니다.
-- 메시지 본문/작성자/캡션/미디어는 SQLite, 파일, 브라우저 저장소, analytics에 저장하지 않습니다. 미디어는 다운로드하지 않고 종류만 표시합니다. Telegram 결과는 해당 요청의 메모리에서만 처리합니다.
+- 메시지 본문/작성자/캡션/첨부 파일은 SQLite, 파일, 브라우저 저장소, analytics에 저장하지 않습니다. 사진·동영상·PDF 등 첨부 파일은 링크를 누를 때에만 Telegram에서 브라우저로 스트리밍합니다. `열기`는 브라우저에서 바로 보며, `내 PC에 저장`은 사용 중인 컴퓨터에 다운로드합니다. Oracle에는 임시·영구 파일을 만들지 않습니다.
 - Telethon entity 디스크 저장을 끄고, 조회에 필요한 input peer/access_hash는 대화방 조회 결과에서 메모리로만 보관합니다. Telethon 인증 session은 메시지 DB가 아닙니다.
 - 모든 응답 `Cache-Control: no-store`. nginx 캐시, 요청/응답 임시파일 buffering, access log를 끕니다. Telethon 계정 정보가 포함될 수 있는 로그를 비활성화합니다. API body debug log를 남기지 않습니다.
 - 일반 소스 백업에 `/etc/stock15-7.env`, `/var/lib/stock15-7`, Telegram session을 포함하지 마세요. 앱의 기록삭제는 별도 백업/OS snapshot까지 지우지 않습니다. OS swap/core dump로 메모리가 디스크에 기록되지 않게 Oracle의 swap 정책도 확인하세요. systemd의 core dump 제한은 0입니다.
@@ -310,11 +310,11 @@ CREATE TABLE web_sessions (
 );
 ```
 
-app_settings에는 history_start_date와 변경 감지용 state_revision만 저장합니다. 선택/숨김/설정 변경마다 revision이 증가합니다. 숨김 필터는 `(chat_id, message_id)` batch SQL로 조회합니다. DB 크기는 숨긴 ID 개수에 따라 증가하며 본문 크기와는 무관합니다. 만료 세션은 로그인 때 정리합니다.
+app_settings에는 history_start_date, theme, 변경 감지용 state_revision만 저장합니다. 선택/숨김/설정 변경마다 revision이 증가합니다. 숨김 필터는 `(chat_id, message_id)` batch SQL로 조회합니다. DB 크기는 숨긴 ID 개수에 따라 증가하며 본문 크기와는 무관합니다. 만료 세션은 로그인 때 정리합니다.
 
 ## Telegram API, 날짜, pagination
 
-CLI에서만 send_code_request/sign_in 인증을 합니다. 웹 서버는 connect/is_user_authorized, iter_dialogs, iter_messages로 기존 session의 history만 읽습니다. `receive_updates=False`, `save_entities=False`, `flood_sleep_threshold=0`, 유한 재시도와 4개의 semaphore로 제한합니다. FloodWait는 HTTP 429 + Retry-After로 전달하고 무한 재시도하지 않습니다. 여러 브라우저의 피드 요청도 순차 처리합니다.
+CLI에서만 send_code_request/sign_in 인증을 합니다. 웹 서버는 connect/is_user_authorized, iter_dialogs, iter_messages로 기존 session의 history만 읽고, 사용자가 첨부 링크를 누를 때만 iter_download로 바이트를 HTTP 응답에 스트리밍합니다. 이 과정은 저장 파일을 만들지 않습니다. `receive_updates=False`, `save_entities=False`, `flood_sleep_threshold=0`, 유한 재시도와 4개의 semaphore로 제한합니다. FloodWait는 HTTP 429 + Retry-After로 전달하고 무한 재시도하지 않습니다. 여러 브라우저의 피드 요청도 순차 처리합니다.
 
 날짜는 ZoneInfo('Asia/Seoul')로 계산한 `[당일 00:00, 다음 날 00:00)` 반개구간을 UTC로 변환합니다. 모든 Telegram timestamp는 timezone-aware여야 합니다. 2026-10-02 15:01 UTC와 2026-10-03 14:59 UTC는 모두 2026-10-03 KST에 포함되고, 다음 날 00:00은 제외됩니다.
 

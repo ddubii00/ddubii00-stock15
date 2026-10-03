@@ -77,6 +77,31 @@ def test_multidevice_selection_and_hidden_state(authenticated, rig):
     assert client.get(PREFIX + '/settings').json()['hiddenCount'] == 0
 
 
+def test_theme_is_saved_on_server_for_every_browser(authenticated, rig):
+    app, client, headers, _, _ = authenticated
+    other = TestClient(app, base_url='https://reader.test')
+    other_headers = sign_in(other, rig[2])
+    result = client.put(PREFIX + '/settings/theme', json={'theme': 'dark'}, headers=headers)
+    assert result.status_code == 200 and result.json()['theme'] == 'dark'
+    assert other.get(PREFIX + '/settings').json()['theme'] == 'dark'
+    assert other.put(PREFIX + '/settings/theme', json={'theme': 'light'}, headers=other_headers).json()['theme'] == 'light'
+    assert client.get(PREFIX + '/settings').json()['theme'] == 'light'
+
+
+def test_attachment_streams_to_browser_without_server_file(authenticated):
+    _, client, headers, _, config = authenticated
+    assert client.put(PREFIX + '/settings/chats', json={'chatIds': ['-1001']}, headers=headers).status_code == 200
+    inline = client.get(PREFIX + '/media/-1001/3?disposition=inline')
+    assert inline.status_code == 200
+    assert inline.content == b'%PDF-synthetic-attachment'
+    assert inline.headers['content-type'].startswith('application/pdf')
+    assert inline.headers['content-disposition'].startswith("inline; filename*=UTF-8''synthetic.pdf")
+    download = client.get(PREFIX + '/media/-1001/3?disposition=attachment')
+    assert download.headers['content-disposition'].startswith("attachment; filename*=UTF-8''synthetic.pdf")
+    assert client.get(PREFIX + '/media/-1002/10').status_code == 403
+    assert not any(path.name.startswith('synthetic') for path in config.db_path.parent.iterdir())
+
+
 def test_kst_exact_date_bounds_and_no_naive_datetime():
     start, end = date_bounds(date(2026, 10, 3))
     assert start == datetime(2026, 10, 2, 15, tzinfo=timezone.utc)

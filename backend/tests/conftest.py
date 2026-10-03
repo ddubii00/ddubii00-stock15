@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.config import Config
 from backend.app.main import create_app
-from backend.app.telegram import Chat, Scan
+from backend.app.telegram import Chat, MediaDownload, Scan
 
 
 class FakeTelegram:
@@ -29,7 +29,7 @@ class FakeTelegram:
 
     @staticmethod
     def message(cid, mid, when):
-        return {'chatId': cid, 'chatTitle': '합성 대화방', 'messageId': mid, 'timestamp': when, 'text': 'SYNTHETIC_BODY_NEVER_PERSIST_' + str(mid), 'sender': 'SYNTHETIC_SENDER_NEVER_PERSIST', 'links': [], 'media': '파일', 'forwarded': False}
+        return {'chatId': cid, 'chatTitle': '합성 대화방', 'messageId': mid, 'timestamp': when, 'text': 'SYNTHETIC_BODY_NEVER_PERSIST_' + str(mid), 'sender': 'SYNTHETIC_SENDER_NEVER_PERSIST', 'links': [], 'media': '파일', 'attachment': {'label': '파일'}, 'forwarded': False}
 
     async def close(self):
         pass
@@ -62,6 +62,15 @@ class FakeTelegram:
             if start <= when < end:
                 valid.append(m)
         return Scan(valid, last, exited or len(raw) < limit, last_key)
+
+    async def media_stream(self, chat_id, message_id):
+        if chat_id not in self.chats or not any(item['messageId'] == message_id for item in self.messages.get(chat_id, [])):
+            return None
+
+        async def chunks():
+            yield b'%PDF-synthetic-attachment'
+
+        return MediaDownload('파일', 'synthetic.pdf', 'application/pdf', True, chunks())
 
 
 @pytest.fixture

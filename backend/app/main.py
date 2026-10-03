@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,10 @@ class StartDateBody(BaseModel):
 class HideBody(BaseModel):
     chatId: ChatId
     messageId: int = Field(gt=0, le=2147483647)
+
+
+class ThemeBody(BaseModel):
+    theme: Literal['light', 'dark']
 
 
 def create_app(config: Config | None = None, telegram=None):
@@ -147,6 +151,11 @@ def create_app(config: Config | None = None, telegram=None):
         db.set_start_date(body.date.isoformat())
         return db.settings()
 
+    @app.put('/api/settings/theme', dependencies=secured)
+    async def set_theme(body: ThemeBody):
+        db.set_theme(body.theme)
+        return db.settings()
+
     @app.delete('/api/settings/records', dependencies=secured)
     async def delete_records(response: Response, request: Request):
         async with feed.lock:
@@ -164,6 +173,18 @@ def create_app(config: Config | None = None, telegram=None):
         if date > today_kst():
             raise HTTPException(400, '미래 날짜는 조회할 수 없습니다.')
         return await feed.page(date, order, chat_id, cursor, limit)
+
+    @app.get('/api/media/{chat_id}/{message_id}', dependencies=secured)
+    async def media(chat_id: ChatId, message_id: Annotated[int, Field(gt=0, le=2147483647)], disposition: Literal['inline', 'attachment'] = 'inline'):
+        if chat_id not in db.settings()['selectedChatIds']:
+            raise HTTPException(403, '선택된 대화방의 첨부 파일만 열 수 있습니다.')
+        download = await reader.media_stream(chat_id, message_id)
+        if not download:
+            raise HTTPException(404, '첨부 파일을 찾을 수 없습니다.')
+        from urllib.parse import quote
+        mode = 'inline' if disposition == 'inline' and download.inline else 'attachment'
+        filename = quote(download.filename.replace('/', '_').replace('\\', '_'), safe='')
+        return StreamingResponse(download.chunks, media_type=download.content_type, headers={'Content-Disposition': f"{mode}; filename*=UTF-8''{filename}"})
 
     @app.post('/api/messages/hide', dependencies=secured)
     async def hide(body: HideBody):
