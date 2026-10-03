@@ -91,13 +91,11 @@ def test_theme_is_saved_on_server_for_every_browser(authenticated, rig):
 def test_attachment_streams_to_browser_without_server_file(authenticated):
     _, client, headers, _, config = authenticated
     assert client.put(PREFIX + '/settings/chats', json={'chatIds': ['-1001']}, headers=headers).status_code == 200
-    inline = client.get(PREFIX + '/media/-1001/3?disposition=inline')
-    assert inline.status_code == 200
-    assert inline.content == b'%PDF-synthetic-attachment'
-    assert inline.headers['content-type'].startswith('application/pdf')
-    assert inline.headers['content-disposition'].startswith("inline; filename*=UTF-8''synthetic.pdf")
-    download = client.get(PREFIX + '/media/-1001/3?disposition=attachment')
-    assert download.headers['content-disposition'].startswith("attachment; filename*=UTF-8''synthetic.pdf")
+    download = client.get(PREFIX + '/media/-1001/3')
+    assert download.status_code == 200
+    assert download.content == b'%PDF-synthetic-attachment'
+    assert download.headers['content-type'].startswith('application/pdf')
+    assert download.headers['content-disposition'].startswith("inline; filename*=UTF-8''synthetic.pdf")
     assert client.get(PREFIX + '/media/-1002/10').status_code == 403
     assert not any(path.name.startswith('synthetic') for path in config.db_path.parent.iterdir())
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleHelp, Download, ExternalLink, FileText, Hash, LayoutGrid, List, LoaderCircle, LockKeyhole, LogOut, MessageCircle, Radio, RefreshCw, Search, Send, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
-import { api, apiUrl, ApiError, httpUrl, setCsrf, todayKst } from './api';
+import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleHelp, Download, Hash, LayoutGrid, List, LoaderCircle, LockKeyhole, LogOut, MessageCircle, Radio, RefreshCw, Search, Send, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import { api, apiUrl, ApiError, httpUrl, openExternalWindow, setCsrf, todayKst } from './api';
 import type { Chat, Hidden, Message, Page, Settings, Status } from './types';
 import TelemoaPanel from './TelemoaPanel';
 
@@ -27,14 +27,19 @@ function Modal({ title, close, children, wide = false, error = '' }: { title: st
     document.addEventListener('keydown', handle);
     return () => { document.removeEventListener('keydown', handle); previous?.focus(); };
   }, [close]);
-  return <div className="overlay"><div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={`modal ${wide ? 'wide' : ''}`}><div className="modal-head"><h2>{title}</h2><button className="icon-button" onClick={close} aria-label="닫기"><X size={20} /></button></div>{error && <div className="alert error" role="alert">{error}</div>}{children}</div></div>;
+  return <div className="overlay"><div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={`modal ${wide ? 'wide' : ''}`} onDoubleClick={close}><div className="modal-head"><h2>{title}</h2><button className="icon-button" onClick={close} aria-label="닫기"><X size={20} /></button></div>{error && <div className="alert error" role="alert">{error}</div>}{children}</div></div>;
 }
 
-function MessageText({ text }: { text: string }) {
+function openInWindow(event: ReactMouseEvent<HTMLAnchorElement>) {
+  event.preventDefault();
+  openExternalWindow(event.currentTarget.href);
+}
+
+function MessageText({ text, links }: { text: string; links: string[] }) {
   return <div className="message-text">{text.split(/(https?:\/\/[^\s<>]+)/g).map((part, i) => {
     const url = httpUrl(part);
-    return url ? <a key={i} href={url} target="_blank" rel="noopener noreferrer">{part}</a> : part;
-  })}</div>;
+    return url ? <a key={i} href={url} onClick={openInWindow}>{part}</a> : part;
+  })}{links.filter(link => !text.includes(link) && httpUrl(link)).map(link => <span key={link}><br /><a href={httpUrl(link)!} onClick={openInWindow}>{link}</a></span>)}</div>;
 }
 
 export default function App({ demo }: { demo: boolean }) {
@@ -227,8 +232,8 @@ export default function App({ demo }: { demo: boolean }) {
   const grouped = new Map<string, Message[]>();
   visibleMessages.forEach(m => grouped.set(m.chatId, [...(grouped.get(m.chatId) || []), m]));
   const chatGroups = [...grouped].sort((a, b) => a[1][0].chatTitle.localeCompare(b[1][0].chatTitle, 'ko', { numeric: true }) || a[0].localeCompare(b[0]));
-  const mediaUrl = (m: Message, disposition: 'inline' | 'attachment') => apiUrl(`media/${encodeURIComponent(m.chatId)}/${m.messageId}?disposition=${disposition}`);
-  const card = (m: Message) => <article className="message-card" key={keyOf(m)}><div className="message-top"><span className={`avatar tone-${Math.abs(Number(m.chatId)) % 4}`}><Hash size={18} /></span><div className="message-origin"><strong>{m.chatTitle}</strong><span>{m.sender || '채널 메시지'}<i>·</i><time dateTime={m.timestamp}>{timeLabel(m.timestamp)}</time></span></div><button className="hide-button" aria-label={`${m.chatTitle} 메시지 숨기기`} title="이 웹앱에서 숨기기" onClick={() => void hide(m)}><X size={17} /></button></div><MessageText text={m.text} />{m.links.filter(link => !m.text.includes(link) && httpUrl(link)).map(link => <a className="entity-link" href={httpUrl(link)!} key={link} target="_blank" rel="noopener noreferrer">{link}</a>)}{(m.forwarded || m.media) && <div className="message-tags">{m.forwarded && <span><ChevronRight size={13} />전달 메시지</span>}{m.attachment ? <div className="attachment-links"><span><FileText size={13} />{m.attachment.label} · 서버 저장 안 함</span><a href={mediaUrl(m, 'inline')} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} />열기</a><a href={mediaUrl(m, 'attachment')}><Download size={13} />내 PC에 저장</a></div> : m.media && <span><FileText size={13} />{m.media}</span>}</div>}</article>;
+  const mediaUrl = (m: Message) => apiUrl(`media/${encodeURIComponent(m.chatId)}/${m.messageId}`);
+  const card = (m: Message) => <article className="message-card" key={keyOf(m)}><div className="message-top"><span className={`avatar tone-${Math.abs(Number(m.chatId)) % 4}`}><Hash size={18} /></span><div className="message-origin"><strong>{m.chatTitle}</strong><span>{m.sender || '채널 메시지'}<i>·</i><time dateTime={m.timestamp}>{timeLabel(m.timestamp)}</time></span></div><button className="hide-button" aria-label={`${m.chatTitle} 메시지 숨기기`} title="이 웹앱에서 숨기기" onClick={() => void hide(m)}><X size={17} /></button></div><MessageText text={m.text} links={m.links} />{(m.forwarded || m.attachment) && <div className="message-tags">{m.forwarded && <span><ChevronRight size={13} />전달 메시지</span>}{m.attachment && <a className="attachment-button" href={mediaUrl(m)} onClick={openInWindow}><Download size={13} />{m.attachment.label}</a>}</div>}</article>;
 
   if (!ready) return <div className="loading-screen"><LoaderCircle className="spin" />불러오는 중</div>;
   if (!logged) return <div className="login-page"><div className="login-card"><div className="brand-icon"><Send size={27} /></div><h1>Telegram Reader</h1><p>나의 대화, 한곳에서 차분하게.</p><form onSubmit={event => void login(event)}><label htmlFor="password">웹앱 비밀번호</label><div className="password-field"><LockKeyhole size={18} /><input id="password" type="password" value={password} autoComplete="current-password" autoFocus required maxLength={1024} onChange={event => setPassword(event.target.value)} placeholder="비밀번호를 입력하세요" /></div><button className="primary full" disabled={busy || !!retryUntil}>{busy ? '확인 중…' : '로그인'}</button></form>{error && <p className="error" role="alert">{error}</p>}{notice && <p className="hint">{notice}</p>}<div className="login-footer"><ShieldCheck size={16} />개인 계정 전용 · 메시지 영구저장 없음</div>{demo && <p className="hint">예시 데이터 미리보기 · 아무 텍스트로 로그인할 수 있습니다.</p>}</div></div>;

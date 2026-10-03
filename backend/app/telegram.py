@@ -46,7 +46,6 @@ class MediaDownload:
     label: str
     filename: str
     content_type: str
-    inline: bool
     chunks: AsyncIterator[bytes]
 
 
@@ -77,9 +76,15 @@ def media_label(message) -> str | None:
     return None
 
 
-def attachment_label(message) -> str | None:
-    label = media_label(message)
-    return label if label and label not in ('투표', '미디어') else None
+def attachment_metadata(message) -> dict[str, str] | None:
+    if getattr(message, 'photo', None):
+        return {'kind': 'photo', 'label': '사진'}
+    if getattr(message, 'video', None):
+        return {'kind': 'video', 'label': '동영상'}
+    file = getattr(message, 'file', None)
+    if getattr(file, 'mime_type', None) == 'application/pdf':
+        return {'kind': 'pdf', 'label': 'PDF'}
+    return None
 
 
 def serialize_message(message, chat: Chat):
@@ -101,13 +106,13 @@ def serialize_message(message, chat: Chat):
         if url and (valid := safe_url(url)) and valid not in links:
             links.append(valid)
     media = media_label(message)
-    attachment = attachment_label(message)
+    attachment = attachment_metadata(message)
     timestamp = require_aware(message.date).astimezone(KST)
     return {
         'chatId': chat.chat_id, 'chatTitle': chat.title, 'messageId': message.id,
         'sender': sender_name, 'timestamp': timestamp.isoformat(), 'text': text,
         'links': links, 'forwarded': bool(message.fwd_from), 'media': media,
-        'attachment': {'label': attachment} if attachment else None,
+        'attachment': attachment,
     }
 
 
@@ -237,15 +242,13 @@ class TelegramReader:
                 self.check_cooldown()
                 async with asyncio.timeout(30):
                     message = await self.client.get_messages(chat.entity, ids=message_id)
-            label = attachment_label(message) if message else None
-            if not label:
+            attachment = attachment_metadata(message) if message else None
+            if not attachment:
                 return None
             file = message.file
-            content_type = getattr(file, 'mime_type', None) or ('image/jpeg' if label == '사진' else 'application/octet-stream')
-            extension = getattr(file, 'ext', None) or ('.jpg' if label == '사진' else '')
+            content_type = getattr(file, 'mime_type', None) or ('image/jpeg' if attachment['kind'] == 'photo' else 'application/octet-stream')
+            extension = getattr(file, 'ext', None) or ('.jpg' if attachment['kind'] == 'photo' else '')
             filename = getattr(file, 'name', None) or f'telegram-{chat_id}-{message_id}{extension}'
-            inline = content_type == 'application/pdf' or content_type.startswith(('image/', 'video/', 'audio/'))
-
             async def chunks():
                 try:
                     async with self.semaphore:
@@ -258,7 +261,7 @@ class TelegramReader:
                 except (errors.RPCError, OSError, TimeoutError, ValueError):
                     raise TelegramUnavailable() from None
 
-            return MediaDownload(label, filename, content_type, inline, chunks())
+            return MediaDownload(attachment['label'], filename, content_type, chunks())
         except errors.FloodWaitError as exc:
             self.cooldown_until = time.monotonic() + exc.seconds
             raise TelegramLimited(exc.seconds) from None

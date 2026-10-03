@@ -22,9 +22,22 @@ def test_serialization_kst_caption_forward_and_safe_links():
     result = serialize_message(msg, chat)
     assert result['timestamp'] == '2026-10-03T00:01:00+09:00'
     assert result['text'] == text and result['media'] == '사진' and result['forwarded']
-    assert result['attachment'] == {'label': '사진'}
+    assert result['attachment'] == {'kind': 'photo', 'label': '사진'}
     assert result['sender'] == '합성 작성자'
     assert result['links'] == ['https://telegram.org']
+
+
+def test_only_photo_pdf_and_video_receive_attachment_buttons():
+    chat = Chat('-1001', '합성 방', 'channel', datetime.now(timezone.utc))
+    pdf = message(2, '2026-10-02T15:01:00+00:00')
+    pdf.photo, pdf.document, pdf.file = None, object(), SimpleNamespace(mime_type='application/pdf')
+    video = message(3, '2026-10-02T15:01:00+00:00')
+    video.photo, video.video = None, object()
+    generic = message(4, '2026-10-02T15:01:00+00:00')
+    generic.photo, generic.document, generic.file = None, object(), SimpleNamespace(mime_type='application/zip')
+    assert serialize_message(pdf, chat)['attachment'] == {'kind': 'pdf', 'label': 'PDF'}
+    assert serialize_message(video, chat)['attachment'] == {'kind': 'video', 'label': '동영상'}
+    assert serialize_message(generic, chat)['attachment'] is None
 
 
 @pytest.mark.parametrize('order', ['asc', 'desc'])

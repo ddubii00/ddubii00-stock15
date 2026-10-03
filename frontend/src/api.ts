@@ -25,3 +25,8 @@ export function todayKst() {
 export function httpUrl(value: string): string | null {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; }
 }
+
+export function openExternalWindow(url: string) {
+  const popup = window.open(url, '_blank', 'popup=yes,width=1100,height=800,noopener,noreferrer');
+  if (popup) popup.opener = null;
+}

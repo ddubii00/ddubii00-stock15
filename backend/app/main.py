@@ -175,16 +175,15 @@ def create_app(config: Config | None = None, telegram=None):
         return await feed.page(date, order, chat_id, cursor, limit)
 
     @app.get('/api/media/{chat_id}/{message_id}', dependencies=secured)
-    async def media(chat_id: ChatId, message_id: Annotated[int, Field(gt=0, le=2147483647)], disposition: Literal['inline', 'attachment'] = 'inline'):
+    async def media(chat_id: ChatId, message_id: Annotated[int, Field(gt=0, le=2147483647)]):
         if chat_id not in db.settings()['selectedChatIds']:
             raise HTTPException(403, '선택된 대화방의 첨부 파일만 열 수 있습니다.')
         download = await reader.media_stream(chat_id, message_id)
         if not download:
             raise HTTPException(404, '첨부 파일을 찾을 수 없습니다.')
         from urllib.parse import quote
-        mode = 'inline' if disposition == 'inline' and download.inline else 'attachment'
         filename = quote(download.filename.replace('/', '_').replace('\\', '_'), safe='')
-        return StreamingResponse(download.chunks, media_type=download.content_type, headers={'Content-Disposition': f"{mode}; filename*=UTF-8''{filename}"})
+        return StreamingResponse(download.chunks, media_type=download.content_type, headers={'Content-Disposition': f"inline; filename*=UTF-8''{filename}"})
 
     @app.post('/api/messages/hide', dependencies=secured)
     async def hide(body: HideBody):

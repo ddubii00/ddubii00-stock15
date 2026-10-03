@@ -29,7 +29,7 @@ class FakeTelegram:
 
     @staticmethod
     def message(cid, mid, when):
-        return {'chatId': cid, 'chatTitle': '합성 대화방', 'messageId': mid, 'timestamp': when, 'text': 'SYNTHETIC_BODY_NEVER_PERSIST_' + str(mid), 'sender': 'SYNTHETIC_SENDER_NEVER_PERSIST', 'links': [], 'media': '파일', 'attachment': {'label': '파일'}, 'forwarded': False}
+        return {'chatId': cid, 'chatTitle': '합성 대화방', 'messageId': mid, 'timestamp': when, 'text': 'SYNTHETIC_BODY_NEVER_PERSIST_' + str(mid), 'sender': 'SYNTHETIC_SENDER_NEVER_PERSIST', 'links': [], 'media': '파일', 'attachment': {'kind': 'pdf', 'label': 'PDF'}, 'forwarded': False}
 
     async def close(self):
         pass
@@ -70,7 +70,7 @@ class FakeTelegram:
         async def chunks():
             yield b'%PDF-synthetic-attachment'
 
-        return MediaDownload('파일', 'synthetic.pdf', 'application/pdf', True, chunks())
+        return MediaDownload('PDF', 'synthetic.pdf', 'application/pdf', chunks())
 
 
 @pytest.fixture
