@@ -7,8 +7,8 @@ from urllib.parse import urlsplit
 @dataclass(frozen=True)
 class Config:
     app_password: str = field(repr=False)
-    db_path: Path = Path('/var/lib/telegram-reader/app.sqlite3')
-    session_path: Path = Path('/var/lib/telegram-reader/session/telegram.session')
+    db_path: Path = Path('/var/lib/stock15-7/app.sqlite3')
+    session_path: Path = Path('/var/lib/stock15-7/session/telegram.session')
     api_id: int | None = field(default=None, repr=False)
     api_hash: str | None = field(default=None, repr=False)
     origin: str = 'https://localhost'
@@ -35,8 +35,8 @@ class Config:
             raise ValueError('TELEGRAM_API_ID must be numeric') from None
         return cls(
             app_password=os.getenv('APP_PASSWORD', ''),
-            db_path=Path(os.getenv('APP_DB_PATH') or '/var/lib/telegram-reader/app.sqlite3'),
-            session_path=Path(os.getenv('TELEGRAM_SESSION_PATH') or '/var/lib/telegram-reader/session/telegram.session'),
+            db_path=Path(os.getenv('APP_DB_PATH') or '/var/lib/stock15-7/app.sqlite3'),
+            session_path=Path(os.getenv('TELEGRAM_SESSION_PATH') or '/var/lib/stock15-7/session/telegram.session'),
             api_id=parsed_id,
             api_hash=os.getenv('TELEGRAM_API_HASH') or None,
             origin=os.getenv('APP_ORIGIN') or 'https://localhost',

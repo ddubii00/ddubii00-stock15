@@ -8,8 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKIP = {'.git', 'node_modules', 'dist', '.venv', 'venv', '__pycache__', '.pytest_cache', 'test-results'}
-FORBIDDEN = ('.env', '.env.*', '*.session', '*.session-*', '*.sqlite', '*.sqlite3', '*.sqlite-*', '*.sqlite3-*', '*.pem', '*.key')
-REQUIRED = ['.env', '.env.*', '*.session', '*.session-journal', '*.sqlite', '*.sqlite3', 'data/', 'secrets/']
+FORBIDDEN = ('.env', '.env.*', '*.session', '*.session-*', '*.sqlite*', '*.pem', '*.key', '*.log')
+REQUIRED = ['.env', '.env.*', '*.session', '*.session-*', '*.session-journal', '*.sqlite', '*.sqlite3', '*.sqlite*', 'data/', 'secrets/', '*.pem', '*.key', '*.log', '.venv/', 'node_modules/', 'dist/']
 
 
 def source_files():
@@ -49,7 +49,7 @@ def check():
     if result.returncode == 0:
         tracked = result.stdout.decode().split('\0')
         errors.extend('Forbidden Git tracked file: ' + name for name in tracked if name and forbidden(name))
-        samples = ['.env', '.env.production', 'telegram.session', 'telegram.session-journal', 'app.sqlite3', 'app.sqlite3-wal', 'data/message.json', 'secrets/key']
+        samples = ['.env', '.env.production', 'telegram.session', 'telegram.session-journal', 'app.sqlite3', 'app.sqlite3-wal', 'app.sqlite3-shm', 'app.sqlite-journal', 'tls.pem', 'ssh.key', 'server.log', 'data/message.json', 'secrets/key', '.venv/bin/python', 'frontend/node_modules/example/index.js', 'frontend/dist/index.html']
         ignored = subprocess.run(['git', 'check-ignore', '--stdin'], input='\n'.join(samples) + '\n', cwd=ROOT, text=True, capture_output=True)
         errors.extend('Not gitignored: ' + name for name in samples if name not in ignored.stdout.splitlines())
     backend = list((ROOT / 'backend' / 'app').glob('*.py'))

@@ -22,35 +22,38 @@
 **Telegram session 파일을 획득한 사람은 Telegram 계정에 접근할 수 있으므로 API hash나 비밀번호와 동일하거나 그 이상으로 보호해야 한다.**
 
 - 실제 secret은 사용자가 Oracle에서 직접 입력합니다. 코드, fixture, README, Git history에 실제 값을 넣지 않습니다. `.env.example`에는 값 없이 변수 이름만 있습니다.
-- Telegram 인증 session: `/var/lib/telegram-reader/session/telegram.session`, 전용 사용자 소유, `600`. 디렉터리 `700`.
+- Telegram 인증 session: `/var/lib/stock15-7/session/telegram.session`, 전용 사용자 소유, `600`. 디렉터리 `700`.
 - 환경변수: `/etc/stock15-7.env`, root 소유 `600`. systemd가 읽어 전용 사용자 프로세스에 전달합니다.
-- 설정 DB: `/var/lib/telegram-reader/app.sqlite3`, 전용 사용자 소유 `600`.
+- 설정 DB: `/var/lib/stock15-7/app.sqlite3`, 전용 사용자 소유 `600`.
 - 웹 쿠키: HttpOnly, Secure, SameSite=Strict, 경로 `/stock15-7/`, 유효기간 12시간. 비밀번호나 메시지를 localStorage/IndexedDB에 저장하지 않습니다. 비밀번호는 로그인 요청 중에만 메모리에 있으며 즉시 입력칸을 비웁니다.
 - 로그인 Origin 검사와 변경 요청의 Origin + CSRF 검사를 합니다. `APP_ORIGIN`은 HTTPS origin이고 끝에 경로를 붙이지 않습니다. 비밀번호는 최소 4자이며 설정되지 않으면 서버 시작을 거부합니다.
 - APP_PASSWORD는 메모리에서 scrypt 검증합니다. 웹 세션 토큰 원문은 DB에 넣지 않고 SHA-256 해시만 저장합니다. 서비스 재시작/비밀번호 변경은 모든 웹 로그인을 무효화합니다. 프로세스는 **1 worker**만 실행합니다.
 - 메시지 본문/작성자/캡션/미디어는 SQLite, 파일, 브라우저 저장소, analytics에 저장하지 않습니다. 미디어는 다운로드하지 않고 종류만 표시합니다. Telegram 결과는 해당 요청의 메모리에서만 처리합니다.
 - Telethon entity 디스크 저장을 끄고, 조회에 필요한 input peer/access_hash는 대화방 조회 결과에서 메모리로만 보관합니다. Telethon 인증 session은 메시지 DB가 아닙니다.
 - 모든 응답 `Cache-Control: no-store`. nginx 캐시, 요청/응답 임시파일 buffering, access log를 끕니다. Telethon 계정 정보가 포함될 수 있는 로그를 비활성화합니다. API body debug log를 남기지 않습니다.
-- 일반 소스 백업에 `/etc/stock15-7.env`, `/var/lib/telegram-reader`, Telegram session을 포함하지 마세요. 앱의 기록삭제는 별도 백업/OS snapshot까지 지우지 않습니다. OS swap/core dump로 메모리가 디스크에 기록되지 않게 Oracle의 swap 정책도 확인하세요. systemd의 core dump 제한은 0입니다.
+- 일반 소스 백업에 `/etc/stock15-7.env`, `/var/lib/stock15-7`, Telegram session을 포함하지 마세요. 앱의 기록삭제는 별도 백업/OS snapshot까지 지우지 않습니다. OS swap/core dump로 메모리가 디스크에 기록되지 않게 Oracle의 swap 정책도 확인하세요. systemd의 core dump 제한은 0입니다.
 
 ## 구조
 
 ```text
 HTTPS browser /stock15-7/
-  → nginx (subpath 제거, cache/buffering 없음)
-    → FastAPI 127.0.0.1:8017, root_path=/stock15-7
-      ├─ React production build 정적 제공
-      ├─ 서버 웹 세션 + CSRF
-      ├─ Telethon → Telegram MTProto history 조회
-      ├─ httpx → Telemoa 공개 목록 조회
-      └─ SQLite → 선택 ID / 숨김 ID / 설정 / 웹 로그인 세션
+  → nginx (cache/buffering 없음)
+    ├─ /stock15-7/assets/ → /var/www/stock15-7/frontend/dist/assets/ 직접 제공
+    └─ HTML / favicon / API → FastAPI 127.0.0.1:8017, root_path=/stock15-7
+        ├─ React index.html / favicon 제공
+        ├─ 서버 웹 세션 + CSRF
+        ├─ Telethon → Telegram MTProto history 조회
+        ├─ httpx → Telemoa 공개 목록 조회
+        └─ SQLite → 선택 ID / 숨김 ID / 설정 / 웹 로그인 세션
 ```
 
 `backend/app/telegram.py`는 비대화형 session 재사용과 read-only 조회, `feed.py`는 날짜 필터와 cursor merge, `db.py`는 최소 메타데이터, `auth.py`는 웹 로그인, `telemoa.py`는 공개 목록 변환을 담당합니다.
 
-## 최초 Oracle 설치: 아래 순서대로
+## A. 최초 Oracle 설치
 
-전제: Python **3.11 이상**(Ubuntu 24.04의 기본 Python 사용 가능), Node.js **22.12 이상**, npm, git, nginx와 기존 HTTPS 도메인. Python/Node 버전을 먼저 확인하세요. 서버의 기존 사이트 설정은 유지하고 location 블록만 추가합니다. Oracle 접속/배포는 사용자가 실행하는 단계입니다.
+전제: Python **3.11 이상**(Ubuntu 24.04의 기본 Python 사용 가능), Node.js **22.12 이상**, npm, git, nginx와 기존 HTTPS 도메인. 서버의 기존 사이트 설정은 유지하고 location 블록만 추가합니다. 이미 정상 운영 중인 서버는 아래 **B. 기존 Oracle 서버 업데이트** 절차를 사용하세요. 이 문서의 설치 명령은 Oracle에서 사용자가 실행합니다.
+
+소스는 `/var/www/stock15-7`, venv는 그 아래 `.venv`, 서비스는 `webapp-stock15-7.service`, 환경파일은 `/etc/stock15-7.env`, 운영 데이터는 `/var/lib/stock15-7`입니다. 전용 Linux 사용자는 `telegram-reader`를 유지합니다.
 
 ### 1. Oracle에 clone
 
@@ -61,17 +64,18 @@ sudo apt update
 sudo apt install -y python3-venv git nginx
 python3 --version
 node --version
-sudo useradd --system --user-group --home-dir /var/lib/telegram-reader --shell /usr/sbin/nologin telegram-reader
-sudo install -d -m 755 -o "$USER" -g "$(id -gn)" /var/www/telegram-reader
-git clone https://github.com/ddubii00/ddubii00-stock15.git /var/www/telegram-reader
-cd /var/www/telegram-reader
+sudo useradd --system --user-group --home-dir /var/lib/stock15-7 --shell /usr/sbin/nologin telegram-reader
+sudo install -d -m 755 -o "$USER" -g "$(id -gn)" /var/www/stock15-7
+git clone https://github.com/ddubii00/ddubii00-stock15.git /var/www/stock15-7
+cd /var/www/stock15-7
 ```
 
-사용자가 이미 전용 사용자를 만들었다면 useradd는 생략합니다. 제공된 소스 압축파일을 Oracle의 `/var/www/telegram-reader`에 풀어 같은 단계로 진행할 수도 있습니다.
+사용자가 이미 전용 사용자를 만들었다면 useradd는 생략합니다. 제공된 소스 압축파일을 Oracle의 `/var/www/stock15-7`에 풀어 같은 단계로 진행할 수도 있습니다.
 
 ### 2. Python venv 생성
 
 ```bash
+umask 022
 python3 -m venv .venv
 ```
 
@@ -88,14 +92,25 @@ cd frontend
 npm ci
 npm run build
 cd ..
+
+find frontend/dist -type d -exec chmod 755 {} \;
+find frontend/dist -type f -exec chmod 644 {} \;
+chmod 755 \
+  /var/www/stock15-7 \
+  /var/www/stock15-7/frontend \
+  /var/www/stock15-7/frontend/dist
 ```
 
-Vite base와 Python APP_BASE_PATH 기본값은 `/stock15-7/`입니다. 변경할 때 두 설정과 nginx location을 함께 바꿉니다. 모든 frontend API 요청은 공통 `apiUrl()` helper를 사용합니다.
+Vite base 기본값은 `/stock15-7/`, Python APP_BASE_PATH 기본값은 `/stock15-7`입니다. 변경할 때 두 설정과 nginx location을 함께 바꿉니다. 모든 frontend API 요청은 공통 `apiUrl()` helper를 사용합니다.
+
+서비스의 `UMask=0077`은 인증 session과 SQLite 같은 비밀·운영 파일용입니다. 공개 JS/CSS/HTML은 `telegram-reader`와 nginx의 `www-data`가 읽어야 하므로 build 후 디렉터리는 `755`, 파일은 `644`로 맞춥니다. `umask 077`로 build한 `index.html`이 `600`이면 HTML 응답 전송 오류(`Too little data for declared Content-Length`)와 JS/CSS 접근 오류가 발생할 수 있습니다. 위 chmod는 `frontend/dist`와 공개 소스 경로에만 적용하며 환경파일·session·DB에는 적용하지 않습니다.
 
 ### 5. `/etc/stock15-7.env` 사용자가 직접 생성
 
 ```bash
-sudo install -m 600 -o root -g root /dev/null /etc/stock15-7.env
+if ! sudo test -e /etc/stock15-7.env; then
+  sudo install -m 600 -o root -g root /dev/null /etc/stock15-7.env
+fi
 sudo nano /etc/stock15-7.env
 ```
 
@@ -119,8 +134,8 @@ TZ=
 
 비밀이 아닌 값은 다음과 같이 설정합니다.
 
-- TELEGRAM_SESSION_PATH: `/var/lib/telegram-reader/session/telegram.session`
-- APP_DB_PATH: `/var/lib/telegram-reader/app.sqlite3`
+- TELEGRAM_SESSION_PATH: `/var/lib/stock15-7/session/telegram.session`
+- APP_DB_PATH: `/var/lib/stock15-7/app.sqlite3`
 - APP_ORIGIN: 실제 `https://도메인` (끝의 `/`와 `/stock15-7/` 제외)
 - APP_BASE_PATH: `/stock15-7`
 - TZ: `Asia/Seoul`
@@ -135,13 +150,13 @@ sudo chmod 600 /etc/stock15-7.env
 먼저 session 디렉터리를 만듭니다. 초기 인증 중에는 웹 서비스를 실행하지 않습니다. 파일을 읽는 root 권한과 session을 생성하는 전용 사용자를 분리하기 위해 `systemd-run`을 사용합니다.
 
 ```bash
-sudo install -d -m 700 -o telegram-reader -g telegram-reader /var/lib/telegram-reader/session
+sudo install -d -m 700 -o telegram-reader -g telegram-reader /var/lib/stock15-7/session
 sudo systemd-run --collect --wait --pty \
   --uid=telegram-reader --gid=telegram-reader \
-  --working-directory=/var/www/telegram-reader \
+  --working-directory=/var/www/stock15-7 \
   --property=EnvironmentFile=/etc/stock15-7.env \
   --property=UMask=0077 \
-  /var/www/telegram-reader/.venv/bin/python scripts/telegram_login.py
+  /var/www/stock15-7/.venv/bin/python scripts/telegram_login.py
 ```
 
 전용 사용자로 환경변수가 안전하게 주입된 터미널이라면 다음 명령도 동일합니다.
@@ -161,7 +176,7 @@ getpass 프롬프트에서 직접 입력합니다. 화면, 파일, 로그에 저
 ### 10. session 생성 확인
 
 ```bash
-sudo stat -c '%a %U %G %n' /var/lib/telegram-reader/session/telegram.session
+sudo stat -c '%a %U %G %n' /var/lib/stock15-7/session/telegram.session
 ```
 
 session 내용을 cat하거나 공유하지 마세요.
@@ -169,14 +184,14 @@ session 내용을 cat하거나 공유하지 마세요.
 ### 11. session chmod 600
 
 ```bash
-sudo chown telegram-reader:telegram-reader /var/lib/telegram-reader/session/telegram.session
-sudo chmod 600 /var/lib/telegram-reader/session/telegram.session
+sudo chown telegram-reader:telegram-reader /var/lib/stock15-7/session/telegram.session
+sudo chmod 600 /var/lib/stock15-7/session/telegram.session
 ```
 
 ### 12. DB directory 생성
 
 ```bash
-sudo install -d -m 700 -o telegram-reader -g telegram-reader /var/lib/telegram-reader
+sudo install -d -m 700 -o telegram-reader -g telegram-reader /var/lib/stock15-7
 ```
 
 앱이 `app.sqlite3`과 정확히 네 개의 테이블을 자동 생성합니다. 소스 디렉터리와 venv/build는 전용 사용자가 읽을 수 있어야 하지만 수정 권한은 필요 없습니다.
@@ -184,16 +199,10 @@ sudo install -d -m 700 -o telegram-reader -g telegram-reader /var/lib/telegram-r
 ### 13. systemd 시작
 
 ```bash
-sudo install -m 644 deploy/telegram-reader.service /etc/systemd/system/telegram-reader.service
+sudo install -m 644 deploy/webapp-stock15-7.service /etc/systemd/system/webapp-stock15-7.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now telegram-reader
-sudo systemctl status telegram-reader --no-pager
-```
-
-업데이트 후:
-
-```bash
-sudo systemctl restart telegram-reader
+sudo systemctl enable --now webapp-stock15-7.service
+sudo systemctl status webapp-stock15-7.service --no-pager
 ```
 
 의도적으로 단일 worker입니다. session 파일 하나를 여러 프로세스가 동시에 열지 않습니다.
@@ -201,6 +210,21 @@ sudo systemctl restart telegram-reader
 ### 14. nginx 설정
 
 `deploy/nginx-telegram-reader.conf` 내용을 기존 **HTTPS server 블록 내부**에 추가합니다. APP_ORIGIN과 해당 도메인이 일치해야 합니다. Secure cookie 때문에 HTTPS가 필요합니다. 인증서/실제 도메인 값은 사용자가 서버에서 설정합니다.
+
+필수 구조는 아래 두 location입니다. `location ^~ /stock15-7/assets/`의 `^~` 및 `alias /var/www/stock15-7/frontend/dist/assets/;`의 끝 `/`를 유지하세요. 다른 nginx 정규식 location보다 assets location을 우선하고, Vite JS/CSS는 FastAPI로 넘기지 않습니다. HTML이 200이어도 assets가 404이면 백지 화면이 됩니다.
+
+```nginx
+location ^~ /stock15-7/assets/ {
+    alias /var/www/stock15-7/frontend/dist/assets/;
+    access_log off;
+    add_header Cache-Control "no-store" always;
+}
+
+location /stock15-7/ {
+    proxy_pass http://127.0.0.1:8017/;
+    # 나머지 proxy/header/no-buffer 설정은 deploy/nginx-telegram-reader.conf 사용
+}
+```
 
 ```bash
 sudo nano /etc/nginx/sites-available/현재사이트설정파일
@@ -214,7 +238,54 @@ FastAPI는 127.0.0.1:8017에서만 대기합니다. Oracle/Ubuntu 방화벽에�
 
 최종 주소: **`https://실제-Oracle-도메인/stock15-7/`**
 
-웹앱 비밀번호로 로그인 → 대화방 선택 → 적용. 기본 조회 시작일은 첫 실행의 오늘 KST 날짜이며 설정에서 이전 날짜로 바꿀 수 있습니다. 실제 Oracle 도메인은 아직 전달받지 않았으므로 공개 배포 주소를 확정하지 않았습니다.
+웹앱 비밀번호로 로그인 → 대화방 선택 → 적용. 기본 조회 시작일은 첫 실행의 오늘 KST 날짜이며 설정에서 이전 날짜로 바꿀 수 있습니다. 운영 접속 주소는 서버에 설정한 APP_ORIGIN 뒤에 `/stock15-7/`를 붙인 주소입니다.
+
+## B. 기존 Oracle 서버 업데이트
+
+현재 정상 운영 중인 `/var/www/stock15-7` 저장소에서 실행합니다. `git reset --hard origin/main`은 이 저장소의 추적된 소스 변경을 버리고 GitHub 버전으로 맞춥니다. 필요한 미커밋 소스 변경이 있으면 먼저 별도로 보관하세요.
+
+```bash
+cd /var/www/stock15-7
+
+git fetch origin
+git reset --hard origin/main
+
+.venv/bin/pip install -r requirements.txt
+
+cd frontend
+npm ci
+npm run build
+cd ..
+
+find frontend/dist -type d -exec chmod 755 {} \;
+find frontend/dist -type f -exec chmod 644 {} \;
+chmod 755 \
+  /var/www/stock15-7 \
+  /var/www/stock15-7/frontend \
+  /var/www/stock15-7/frontend/dist
+
+.venv/bin/python scripts/deployment_check.py
+.venv/bin/python scripts/security_check.py
+
+sudo systemctl restart webapp-stock15-7.service
+sudo nginx -t
+sudo systemctl reload nginx
+sudo systemctl status webapp-stock15-7.service --no-pager
+```
+
+업데이트 명령에는 env 생성, Telegram 재인증, DB 초기화, service 파일 설치, nginx 파일 복사가 없습니다. `/etc/systemd/system/webapp-stock15-7.service`와 현재 nginx `all-stocks` 설정은 덮어쓰지 않습니다. **GitHub 소스 업데이트와 운영 systemd/nginx 설정 업데이트는 별도 작업**입니다. 템플릿 변경을 실제 `/etc`에 반영해야 할 경우에만 기존 설정과 비교해 별도로 적용합니다.
+
+`git reset --hard origin/main`은 `/var/www/stock15-7`의 Git working tree를 변경하며, 저장소 밖의 아래 파일에는 영향을 주지 않습니다.
+
+```text
+/etc/stock15-7.env
+/var/lib/stock15-7/session/telegram.session
+/var/lib/stock15-7/app.sqlite3
+```
+
+따라서 Telegram API ID/HASH·전화번호·웹앱 비밀번호와 Telegram 인증 session, 선택한 대화방, 숨김 메시지 ID, 조회 시작일 등 SQLite 설정은 유지됩니다. 서비스가 재시작되면 앱 설계상 **웹 브라우저 로그인 session은 초기화**되므로 웹앱 비밀번호를 다시 입력해야 합니다. Telegram 인증 session은 유지되어 재인증할 필요가 없습니다.
+
+업데이트 후 브라우저에서 HTML과 개발자도구 Network의 `/stock15-7/assets/*.js`·`*.css`가 모두 200인지 확인합니다. assets 404 또는 파일 읽기 오류는 nginx alias와 위 공개 파일 권한부터 확인하세요. 이 소스 작업은 Oracle 서버의 실제 설정 파일을 수정하지 않습니다.
 
 ## SQLite schema
 
@@ -299,10 +370,13 @@ npm run build
 npm test
 cd ..
 .venv/bin/python -m pytest
+.venv/bin/python scripts/deployment_check.py
 .venv/bin/python scripts/security_check.py
 ```
 
 테스트는 runtime에서 임의의 테스트 비밀번호를 만들며 실제 credential을 fixture에 넣지 않습니다. 인증 차단, cookie/CSRF, Telegram 상태, dialog 변환, 기기별 선택/숨김 동기화, UTC/KST 경계, 시작일, 숨김 밀집 pagination의 정렬·중복·누락, DB schema와 실제 파일에 본문 부재, no-store, subpath, gitignore, 기록삭제 후 전체 세션 무효화를 검증합니다. 실제 개인 Telegram 계정/Oracle 운영 연결 검증은 사용자 인증과 서버 설치 후 수행합니다.
+
+`deployment_check.py`는 프런트 경로·백엔드 기본값/4자 검증·systemd 이름/경로/권한·nginx assets alias/8017 proxy 및 문서의 업데이트 보존 규칙이 일치하는지 검사합니다. CI에서도 같은 검사를 실행합니다. Oracle의 실제 nginx/systemd 설정을 읽거나 변경하는 스크립트가 아니며, 실제 설정 문법은 Oracle의 `nginx -t`로 확인합니다.
 
 ## GitHub 소스 관리
 
