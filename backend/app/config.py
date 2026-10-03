@@ -16,8 +16,8 @@ class Config:
     session_seconds: int = 43200
 
     def __post_init__(self):
-        if len(self.app_password) < 12:
-            raise ValueError('APP_PASSWORD must contain at least 12 characters')
+        if len(self.app_password) < 4:
+            raise ValueError('APP_PASSWORD must contain at least 4 characters')
         if not self.db_path.is_absolute() or not self.session_path.is_absolute():
             raise ValueError('Database and Telegram session paths must be absolute')
         parsed = urlsplit(self.origin)
