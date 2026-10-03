@@ -1,0 +1,2 @@
+# Reproducible Python runtime dependencies.
+-r requirements.lock
