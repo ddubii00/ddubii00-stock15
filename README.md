@@ -23,7 +23,7 @@
 - 환경변수: `/etc/stock15-7.env`, root 소유 `600`. systemd가 읽어 전용 사용자 프로세스에 전달합니다.
 - 설정 DB: `/var/lib/telegram-reader/app.sqlite3`, 전용 사용자 소유 `600`.
 - 웹 쿠키: HttpOnly, Secure, SameSite=Strict, 경로 `/stock15-7/`, 유효기간 12시간. 비밀번호나 메시지를 localStorage/IndexedDB에 저장하지 않습니다. 비밀번호는 로그인 요청 중에만 메모리에 있으며 즉시 입력칸을 비웁니다.
-- 로그인 Origin 검사와 변경 요청의 Origin + CSRF 검사를 합니다. `APP_ORIGIN`은 HTTPS origin이고 끝에 경로를 붙이지 않습니다. 비밀번호는 최소 12자이며 설정되지 않으면 서버 시작을 거부합니다.
+- 로그인 Origin 검사와 변경 요청의 Origin + CSRF 검사를 합니다. `APP_ORIGIN`은 HTTPS origin이고 끝에 경로를 붙이지 않습니다. 비밀번호는 최소 4자이며 설정되지 않으면 서버 시작을 거부합니다.
 - APP_PASSWORD는 메모리에서 scrypt 검증합니다. 웹 세션 토큰 원문은 DB에 넣지 않고 SHA-256 해시만 저장합니다. 서비스 재시작/비밀번호 변경은 모든 웹 로그인을 무효화합니다. 프로세스는 **1 worker**만 실행합니다.
 - 메시지 본문/작성자/캡션/미디어는 SQLite, 파일, 브라우저 저장소, analytics에 저장하지 않습니다. 미디어는 다운로드하지 않고 종류만 표시합니다. Telegram 결과는 해당 요청의 메모리에서만 처리합니다.
 - Telethon entity 디스크 저장을 끄고, 조회에 필요한 input peer/access_hash는 대화방 조회 결과에서 메모리로만 보관합니다. Telethon 인증 session은 메시지 DB가 아닙니다.
