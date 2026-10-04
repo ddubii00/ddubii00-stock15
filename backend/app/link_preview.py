@@ -45,24 +45,50 @@ class MetadataParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.meta: dict[str, str] = {}
         self.title_parts: list[str] = []
+        self.paragraphs: list[str] = []
+        self.paragraph_parts: list[str] = []
         self.in_title = False
+        self.in_paragraph = False
+        self.ignored: list[str] = []
 
     def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in ('script', 'style', 'template', 'noscript', 'svg'):
+            self.ignored.append(tag)
+        if self.ignored:
+            return
         attributes = {key.lower(): value for key, value in attrs if value}
-        if tag.lower() == 'meta':
+        if tag == 'meta':
             key = (attributes.get('property') or attributes.get('name') or '').lower()
             if key in ('og:title', 'twitter:title', 'og:description', 'twitter:description', 'description', 'og:image', 'twitter:image') and key not in self.meta:
                 self.meta[key] = attributes.get('content', '')
-        elif tag.lower() == 'title':
+        elif tag == 'title':
             self.in_title = True
+        elif tag == 'p':
+            self.in_paragraph = True
+            self.paragraph_parts = []
 
     def handle_endtag(self, tag):
-        if tag.lower() == 'title':
+        tag = tag.lower()
+        if self.ignored:
+            if tag == self.ignored[-1]:
+                self.ignored.pop()
+            return
+        if tag == 'title':
             self.in_title = False
+        elif tag == 'p' and self.in_paragraph:
+            paragraph = ' '.join(''.join(self.paragraph_parts).split())
+            if len(paragraph) >= 40 and len(self.paragraphs) < 3:
+                self.paragraphs.append(paragraph)
+            self.in_paragraph = False
 
     def handle_data(self, data):
+        if self.ignored:
+            return
         if self.in_title:
             self.title_parts.append(data)
+        if self.in_paragraph:
+            self.paragraph_parts.append(data)
 
 
 def compact(value: str | None, limit: int) -> str | None:
@@ -76,7 +102,7 @@ def parse_preview(html: bytes, final_url: str) -> dict[str, str | None]:
     parser = MetadataParser()
     parser.feed(html.decode('utf-8', errors='replace'))
     title = compact(parser.meta.get('og:title') or parser.meta.get('twitter:title') or ''.join(parser.title_parts), 180)
-    description = compact(parser.meta.get('og:description') or parser.meta.get('twitter:description') or parser.meta.get('description'), 360)
+    description = compact(parser.meta.get('og:description') or parser.meta.get('twitter:description') or parser.meta.get('description') or next(iter(parser.paragraphs), None), 360)
     raw_image = parser.meta.get('og:image') or parser.meta.get('twitter:image')
     image = normalized_url(urljoin(final_url, raw_image), require_https=True) if raw_image else None
     return {'url': final_url, 'title': title, 'description': description, 'image': image}
@@ -104,9 +130,9 @@ class LinkPreviewer:
                             return None
                         chunks = bytearray()
                         async for chunk in response.aiter_bytes():
-                            chunks.extend(chunk)
-                            if len(chunks) > MAX_HTML_BYTES:
-                                return None
+                            chunks.extend(chunk[:MAX_HTML_BYTES - len(chunks)])
+                            if len(chunks) >= MAX_HTML_BYTES:
+                                break
                         preview = parse_preview(bytes(chunks), str(response.url))
                         if not preview['title'] and not preview['description'] and not preview['image']:
                             return None

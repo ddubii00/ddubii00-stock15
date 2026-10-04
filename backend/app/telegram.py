@@ -142,12 +142,19 @@ def serialize_message(message, chat: Chat):
             links.append(valid)
     media = media_label(message)
     attachment = attachment_metadata(message)
+    webpage = getattr(message, 'web_preview', None)
+    preview_url = safe_url(getattr(webpage, 'url', '') or '') if webpage else None
+    link_preview = {
+        'url': preview_url,
+        'title': (getattr(webpage, 'title', None) or None),
+        'description': (getattr(webpage, 'description', None) or None),
+    } if preview_url else None
     timestamp = require_aware(message.date).astimezone(KST)
     return {
         'chatId': chat.chat_id, 'chatTitle': chat.title, 'messageId': message.id,
         'sender': sender_name, 'timestamp': timestamp.isoformat(), 'text': text,
         'links': links, 'forwarded': bool(message.fwd_from), 'media': media,
-        'attachment': attachment,
+        'attachment': attachment, 'linkPreview': link_preview,
     }
 
 

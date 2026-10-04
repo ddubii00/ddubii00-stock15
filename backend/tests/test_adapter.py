@@ -3,9 +3,11 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
+import httpx
 from telethon import errors
 from telethon.tl import types
 
+from backend.app import link_preview as preview_module
 from backend.app.link_preview import normalized_url, parse_preview
 from backend.app.telegram import Chat, InvalidMediaRange, TelegramLimited, TelegramReader, byte_range, serialize_message
 from backend.app.time_utils import date_bounds
@@ -53,11 +55,40 @@ def test_link_preview_thumbnail_does_not_receive_a_photo_button():
     assert serialize_message(preview, chat)['attachment'] is None
 
 
+def test_telegram_web_preview_provides_article_title_and_excerpt():
+    chat = Chat('-1001', '합성 방', 'channel', datetime.now(timezone.utc))
+    preview = message(6, '2026-10-02T15:01:00+00:00', 'https://news.example.com/story')
+    preview.media = types.MessageMediaWebPage(webpage=object())
+    preview.web_preview = SimpleNamespace(url='https://news.example.com/story', title='기사 제목', description='Telegram이 제공한 기사 설명')
+    result = serialize_message(preview, chat)
+    assert result['linkPreview'] == {'url': 'https://news.example.com/story', 'title': '기사 제목', 'description': 'Telegram이 제공한 기사 설명'}
+    assert result['attachment'] is None
+
+
 def test_link_preview_parses_metadata_without_accepting_private_urls():
     html = b'<meta property="og:title" content="Example headline"><meta property="og:description" content="Summary"><meta property="og:image" content="https://images.example.com/card.jpg">'
     assert parse_preview(html, 'https://example.com/article') == {'url': 'https://example.com/article', 'title': 'Example headline', 'description': 'Summary', 'image': 'https://images.example.com/card.jpg'}
     assert normalized_url('http://127.0.0.1/private') is None
     assert normalized_url('https://example.com:8443/private') is None
+
+
+def test_link_preview_uses_first_public_paragraph_when_description_is_missing():
+    html = b'<title>Example story</title><script><p>Ignored script text is long enough to be misleading.</p></script><article><p>A useful first paragraph gives readers a short view of this linked story.</p></article>'
+    assert parse_preview(html, 'https://example.com/story')['description'] == 'A useful first paragraph gives readers a short view of this linked story.'
+
+
+def test_link_preview_reads_metadata_from_a_large_article_without_storing_it(monkeypatch):
+    async def public_host(_url):
+        return None
+
+    html = b'<meta property="og:title" content="Large article"><meta property="og:description" content="Short summary">' + b'x' * (preview_module.MAX_HTML_BYTES + 1)
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, headers={'content-type': 'text/html'}, content=html))
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(preview_module, 'require_public_host', public_host)
+    monkeypatch.setattr(preview_module.httpx, 'AsyncClient', lambda **kwargs: real_client(transport=transport, **kwargs))
+
+    result = asyncio.run(preview_module.LinkPreviewer().get('https://example.com/article'))
+    assert result == {'url': 'https://example.com/article', 'title': 'Large article', 'description': 'Short summary', 'image': None}
 
 
 def test_byte_ranges_accept_video_player_requests():

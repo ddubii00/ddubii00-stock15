@@ -40,6 +40,17 @@ export function httpUrl(value: string): string | null {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; }
 }
 
+export function youtubeId(value: string): string | null {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const parts = url.pathname.split('/').filter(Boolean);
+    const youtubeHost = host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtube-nocookie.com' || host.endsWith('.youtube-nocookie.com');
+    const id = host === 'youtu.be' || host === 'www.youtu.be' ? parts[0] : youtubeHost ? url.searchParams.get('v') || (['shorts', 'embed', 'live'].includes(parts[0]) ? parts[1] : null) : null;
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+  } catch { return null; }
+}
+
 export function openExternalWindow(url: string) {
   const popup = window.open(url, '_blank', 'popup=yes,width=1100,height=800,noopener,noreferrer');
   if (popup) popup.opener = null;
