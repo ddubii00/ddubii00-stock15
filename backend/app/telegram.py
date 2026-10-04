@@ -129,7 +129,9 @@ def serialize_message(message, chat: Chat):
     if sender:
         sender_name = getattr(sender, 'title', None) or ' '.join(filter(None, [getattr(sender, 'first_name', None), getattr(sender, 'last_name', None)])) or None
     links = []
+    text_links = []
     encoded = text.encode('utf-16-le')
+    text_units = len(encoded) // 2
     for entity in message.entities or []:
         url = None
         if isinstance(entity, types.MessageEntityTextUrl):
@@ -138,8 +140,11 @@ def serialize_message(message, chat: Chat):
             url = encoded[entity.offset * 2:(entity.offset + entity.length) * 2].decode('utf-16-le', errors='replace')
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
-        if url and (valid := safe_url(url)) and valid not in links:
-            links.append(valid)
+        if url and (valid := safe_url(url)):
+            if valid not in links:
+                links.append(valid)
+            if 0 <= entity.offset < text_units and 0 < entity.length <= text_units - entity.offset:
+                text_links.append({'offset': entity.offset, 'length': entity.length, 'url': valid})
     media = media_label(message)
     attachment = attachment_metadata(message)
     webpage = getattr(message, 'web_preview', None)
@@ -153,7 +158,7 @@ def serialize_message(message, chat: Chat):
     return {
         'chatId': chat.chat_id, 'chatTitle': chat.title, 'messageId': message.id,
         'sender': sender_name, 'timestamp': timestamp.isoformat(), 'text': text,
-        'links': links, 'forwarded': bool(message.fwd_from), 'media': media,
+        'links': links, 'textLinks': text_links, 'forwarded': bool(message.fwd_from), 'media': media,
         'attachment': attachment, 'linkPreview': link_preview,
     }
 

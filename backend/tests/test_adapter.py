@@ -29,6 +29,24 @@ def test_serialization_kst_caption_forward_and_safe_links():
     assert result['attachment'] == {'kind': 'photo', 'label': '사진'}
     assert result['sender'] == '합성 작성자'
     assert result['links'] == ['https://telegram.org']
+    assert result['textLinks'] == [{'offset': 3, 'length': 20, 'url': 'https://telegram.org'}]
+
+
+def test_hidden_telegram_links_keep_their_inline_labels_and_utf16_offsets():
+    chat = Chat('-1001', '합성 방', 'channel', datetime.now(timezone.utc))
+    text = '😀 삼성전자 상세보기\nSK하이닉스 상세보기'
+    first = len(text[:text.index('상세보기')].encode('utf-16-le')) // 2
+    second = len(text[:text.rindex('상세보기')].encode('utf-16-le')) // 2
+    entities = [
+        types.MessageEntityTextUrl(offset=first, length=4, url='https://example.com/samsung'),
+        types.MessageEntityTextUrl(offset=second, length=4, url='https://example.com/sk'),
+    ]
+    result = serialize_message(message(7, '2026-10-02T15:01:00+00:00', text, entities), chat)
+    assert result['links'] == ['https://example.com/samsung', 'https://example.com/sk']
+    assert result['textLinks'] == [
+        {'offset': first, 'length': 4, 'url': 'https://example.com/samsung'},
+        {'offset': second, 'length': 4, 'url': 'https://example.com/sk'},
+    ]
 
 
 def test_only_photo_pdf_and_video_receive_attachment_buttons():

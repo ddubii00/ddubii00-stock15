@@ -35,13 +35,29 @@ function openInWindow(event: ReactMouseEvent<HTMLAnchorElement>) {
   openExternalWindow(event.currentTarget.href);
 }
 
-function MessageText({ text, links, nativePreview }: { text: string; links: string[]; nativePreview?: Message['linkPreview'] }) {
+export function MessageText({ text, links, textLinks = [], nativePreview }: { text: string; links: string[]; textLinks?: Message['textLinks']; nativePreview?: Message['linkPreview'] }) {
   const inlineLinks = text.match(/https?:\/\/[^\s<>]+/g) || [];
-  const previewLink = [nativePreview?.url, ...inlineLinks, ...links].filter((link): link is string => Boolean(link)).map(httpUrl).find((link): link is string => Boolean(link));
-  return <><div className="message-text">{text.split(/(https?:\/\/[^\s<>]+)/g).map((part, i) => {
+  const previewLink = [nativePreview?.url, ...inlineLinks, ...textLinks.map(entity => entity.url), ...links].filter((link): link is string => Boolean(link)).map(httpUrl).find((link): link is string => Boolean(link));
+  const parts: ReactNode[] = [];
+  const renderedLinks = new Set<string>();
+  let cursor = 0;
+  let key = 0;
+  const appendPlain = (value: string) => value.split(/(https?:\/\/[^\s<>]+)/g).forEach(part => {
+    if (!part) return;
     const url = httpUrl(part);
-    return url ? <a key={i} href={url} onClick={openInWindow}>{part}</a> : part;
-  })}{links.filter(link => !text.includes(link) && httpUrl(link)).map(link => <span key={link}><br /><a href={httpUrl(link)!} onClick={openInWindow}>{link}</a></span>)}</div>{previewLink && <LinkPreview key={previewLink} url={previewLink} nativePreview={nativePreview} />}</>;
+    parts.push(url ? <a key={key++} href={url} onClick={openInWindow}>{part}</a> : <span key={key++}>{part}</span>);
+  });
+  for (const entity of [...textLinks].sort((a, b) => a.offset - b.offset)) {
+    const url = httpUrl(entity.url);
+    const end = entity.offset + entity.length;
+    if (!url || !Number.isInteger(entity.offset) || !Number.isInteger(entity.length) || entity.offset < cursor || entity.length <= 0 || end > text.length) continue;
+    appendPlain(text.slice(cursor, entity.offset));
+    parts.push(<a key={key++} className="embedded-link" href={url} title={url} onClick={openInWindow}>{text.slice(entity.offset, end)}</a>);
+    renderedLinks.add(url);
+    cursor = end;
+  }
+  appendPlain(text.slice(cursor));
+  return <><div className="message-text">{parts}{links.filter(link => !text.includes(link) && !renderedLinks.has(httpUrl(link) || '') && httpUrl(link)).map(link => <span key={link}><br /><a href={httpUrl(link)!} onClick={openInWindow}>{link}</a></span>)}</div>{previewLink && <LinkPreview key={previewLink} url={previewLink} nativePreview={nativePreview} />}</>;
 }
 
 type Preview = { url: string; title: string | null; description: string | null; image: string | null };
@@ -250,7 +266,7 @@ export default function App({ demo }: { demo: boolean }) {
   visibleMessages.forEach(m => grouped.set(m.chatId, [...(grouped.get(m.chatId) || []), m]));
   const chatGroups = [...grouped].sort((a, b) => a[1][0].chatTitle.localeCompare(b[1][0].chatTitle, 'ko', { numeric: true }) || a[0].localeCompare(b[0]));
   const mediaUrl = (m: Message) => apiUrl(`media/${encodeURIComponent(m.chatId)}/${m.messageId}`);
-  const card = (m: Message) => <article className="message-card" key={keyOf(m)} onDoubleClickCapture={() => void hide(m)}><div className="message-top"><span className={`avatar tone-${Math.abs(Number(m.chatId)) % 4}`}><Hash size={18} /></span><div className="message-origin"><strong>{m.chatTitle}</strong><span>{m.sender || '채널 메시지'}<i>·</i><time dateTime={m.timestamp}>{timeLabel(m.timestamp)}</time></span></div><button className="hide-button" aria-label={`${m.chatTitle} 메시지 숨기기`} title="이 웹앱에서 숨기기" onClick={() => void hide(m)}><X size={17} /></button></div>{m.attachment?.kind === 'photo' && <a className="attachment-photo" href={mediaUrl(m)} onClick={openInWindow}><img src={mediaUrl(m)} alt={`${m.chatTitle} 사진 첨부`} loading="lazy" /></a>}{m.attachment?.kind === 'video' && <video className="attachment-video" controls preload="metadata" playsInline src={mediaUrl(m)}>이 브라우저에서는 동영상을 재생할 수 없습니다.</video>}<MessageText text={m.text} links={m.links} nativePreview={m.linkPreview} />{m.attachment?.kind === 'pdf' && <div className="message-tags"><a className="attachment-button" href={mediaUrl(m)} onClick={openInWindow}><Download size={13} />{m.attachment.label}</a></div>}</article>;
+  const card = (m: Message) => <article className="message-card" key={keyOf(m)} onDoubleClickCapture={() => void hide(m)}><div className="message-top"><span className={`avatar tone-${Math.abs(Number(m.chatId)) % 4}`}><Hash size={18} /></span><div className="message-origin"><strong>{m.chatTitle}</strong><span>{m.sender || '채널 메시지'}<i>·</i><time dateTime={m.timestamp}>{timeLabel(m.timestamp)}</time></span></div><button className="hide-button" aria-label={`${m.chatTitle} 메시지 숨기기`} title="이 웹앱에서 숨기기" onClick={() => void hide(m)}><X size={17} /></button></div>{m.attachment?.kind === 'photo' && <a className="attachment-photo" href={mediaUrl(m)} onClick={openInWindow}><img src={mediaUrl(m)} alt={`${m.chatTitle} 사진 첨부`} loading="lazy" /></a>}{m.attachment?.kind === 'video' && <video className="attachment-video" controls preload="metadata" playsInline src={mediaUrl(m)}>이 브라우저에서는 동영상을 재생할 수 없습니다.</video>}<MessageText text={m.text} links={m.links} textLinks={m.textLinks} nativePreview={m.linkPreview} />{m.attachment?.kind === 'pdf' && <div className="message-tags"><a className="attachment-button" href={mediaUrl(m)} onClick={openInWindow}><Download size={13} />{m.attachment.label}</a></div>}</article>;
 
   if (!ready) return <div className="loading-screen"><LoaderCircle className="spin" />불러오는 중</div>;
   if (!logged) return <div className="login-page"><div className="login-card"><div className="brand-icon"><Send size={27} /></div><h1>Telegram Reader</h1><p>나의 대화, 한곳에서 차분하게.</p><form onSubmit={event => void login(event)}><label htmlFor="password">웹앱 비밀번호</label><div className="password-field"><LockKeyhole size={18} /><input id="password" type="password" value={password} autoComplete="current-password" autoFocus required maxLength={1024} onChange={event => setPassword(event.target.value)} placeholder="비밀번호를 입력하세요" /></div><button className="primary full" disabled={busy || !!retryUntil}>{busy ? '확인 중…' : '로그인'}</button></form>{error && <p className="error" role="alert">{error}</p>}{notice && <p className="hint">{notice}</p>}<div className="login-footer"><ShieldCheck size={16} />개인 계정 전용 · 메시지 영구저장 없음</div>{demo && <p className="hint">예시 데이터 미리보기 · 아무 텍스트로 로그인할 수 있습니다.</p>}</div></div>;
