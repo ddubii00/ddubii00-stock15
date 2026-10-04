@@ -49,7 +49,7 @@ export default function App({ demo }: { demo: boolean }) {
   const [day, setDay] = useState(todayKst()), [view, setView] = useState<'feed' | 'chat'>('feed'), [filters, setFilters] = useState<string[] | null>(null);
   const [messages, setMessages] = useState<Message[]>([]), [cursor, setCursor] = useState<string | null>(null), [loading, setLoading] = useState(false), [lastUpdated, setLastUpdated] = useState('');
   const [loadedDay, setLoadedDay] = useState(''), [hiddenKeys, setHiddenKeys] = useState(new Set<string>()), [refreshRevision, setRefreshRevision] = useState(0);
-  const [auto, setAuto] = useState(true), [modal, setModal] = useState<'chats' | 'settings' | 'delete' | null>(null);
+  const [modal, setModal] = useState<'chats' | 'settings' | 'delete' | null>(null);
   const [draftIds, setDraftIds] = useState<string[]>([]), [search, setSearch] = useState(''), [kind, setKind] = useState('public');
   const [draftStart, setDraftStart] = useState(''), [hidden, setHidden] = useState<Hidden[]>([]), [hiddenTotal, setHiddenTotal] = useState(0), [showHidden, setShowHidden] = useState(false);
   const [retryUntil, setRetryUntil] = useState(0), [notice, setNotice] = useState('');
@@ -155,12 +155,6 @@ export default function App({ demo }: { demo: boolean }) {
     }
   }, [logged]);
 
-  useEffect(() => {
-    if (!auto || day !== today || !logged) return;
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') { setDay(todayKst()); void load(); } }, 60000);
-    return () => clearInterval(timer);
-  }, [auto, day, today, logged, load]);
-
   const login = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
     const entered = password; setPassword('');
@@ -245,7 +239,7 @@ export default function App({ demo }: { demo: boolean }) {
     <TelemoaPanel />
     <div className="mobile-chat-filters" aria-label="표시할 대화방"><button className={filters === null ? 'active' : ''} aria-pressed={filters === null} onClick={() => setFilters(null)}>전체 피드</button>{selectedChats.map(c => <button key={c.chatId} className={activeIds.includes(c.chatId) ? 'active' : ''} aria-pressed={activeIds.includes(c.chatId)} onClick={() => toggleChat(c.chatId)}>{activeIds.includes(c.chatId) && <Check size={12} />}{c.title}</button>)}</div>
     <div className="toolbar"><div className="date-control"><button className="icon-button" disabled={day <= (settings?.historyStartDate || day)} onClick={() => moveDay(-1)} aria-label="이전 날짜"><ChevronLeft size={17} /></button><label><CalendarDays size={17} /><strong>{day === today ? '오늘' : day}</strong><span>{dateLabel(day)}</span><input type="date" aria-label="날짜 선택" value={day} min={settings?.historyStartDate} max={today} onChange={e => e.target.value && setDay(e.target.value)} /></label><button className="icon-button" disabled={day >= today} onClick={() => moveDay(1)} aria-label="다음 날짜"><ChevronRight size={17} /></button></div><div className="toolbar-right"><div className="segmented" aria-label="메시지 정렬"><button className={view === 'feed' ? 'selected' : ''} aria-pressed={view === 'feed'} onClick={() => setView('feed')}><List size={16} />시간순</button><button className={view === 'chat' ? 'selected' : ''} aria-pressed={view === 'chat'} onClick={() => setView('chat')}><LayoutGrid size={15} />대화방순</button></div>{day === today && <button className="refresh-button" disabled={loading || !!retryUntil} onClick={() => void load()}><RefreshCw size={16} className={loading ? 'spin' : ''} />새로고침</button>}</div></div>
-    <div className="feed-caption"><div><span className="small-dot" />{activeIds.length}개 대화방<span className="caption-divider">/</span>{visibleMessages.length}개 메시지{loading && <LoaderCircle size={13} className="spin" />}</div><div>{lastUpdated && <span className="updated">{timeLabel(lastUpdated)} 업데이트</span>}{day === today && <label className="auto-refresh"><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} /><span className="switch" />60초 자동 새로고침</label>}</div></div>
+    <div className="feed-caption"><div><span className="small-dot" />{activeIds.length}개 대화방<span className="caption-divider">/</span>{visibleMessages.length}개 메시지{loading && <LoaderCircle size={13} className="spin" />}</div><div>{lastUpdated && <span className="updated">{timeLabel(lastUpdated)} 업데이트</span>}</div></div>
     {error && <div className="alert error" role="alert"><CircleHelp size={17} /><span>{error}</span><button className="icon-button" aria-label="알림 닫기" onClick={() => setError('')}><X size={15} /></button></div>}{notice && <div className="alert">{notice}</div>}
     <section className="feed" aria-label="메시지 피드" aria-busy={loading}>{view === 'feed' ? visibleMessages.map(card) : chatGroups.map(([cid, items]) => <section className="chat-group" key={cid}><h2><Hash size={17} />{items[0].chatTitle}<span>{items.length}</span></h2>{items.map(card)}</section>)}{!visibleMessages.length && <div className="empty-state">{initialLoading ? <LoaderCircle size={32} className="spin" /> : <MessageCircle size={38} />}<h2>{!activeIds.length && selected.length ? '표시할 대화방을 선택해 주세요' : initialLoading ? '대화를 불러오고 있어요' : selected.length ? '표시할 메시지가 없습니다' : '읽고 싶은 대화방을 골라보세요'}</h2><p>{!activeIds.length && selected.length ? '대화방을 클릭해 선택하거나 전체 피드를 눌러주세요.' : initialLoading ? 'Telegram에서 선택한 날짜의 메시지를 조회합니다.' : selected.length ? '다른 날짜를 확인하거나 숨김 기록을 관리해 보세요.' : '채널과 그룹을 선택하면 이곳에 함께 표시됩니다.'}</p>{!selected.length && <button className="primary" onClick={() => void openChats()}>대화방 선택</button>}</div>}</section>
     {cursor && <div className="more-row"><button className="secondary" disabled={loading || !!retryUntil} onClick={() => void load(cursor)}>{loading ? '불러오는 중…' : '더 보기'}<ChevronRight size={16} /></button></div>}
