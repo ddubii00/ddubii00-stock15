@@ -59,31 +59,34 @@ def safe_url(value: str) -> str | None:
 
 
 def media_label(message) -> str | None:
-    if getattr(message, 'photo', None):
+    media = getattr(message, 'media', None)
+    if isinstance(media, types.MessageMediaPhoto):
         return '사진'
-    if getattr(message, 'video', None):
-        return '동영상'
-    if getattr(message, 'voice', None):
-        return '음성'
-    if getattr(message, 'sticker', None):
-        return '스티커'
-    if getattr(message, 'document', None):
+    if isinstance(media, types.MessageMediaDocument):
+        if getattr(message, 'video', None):
+            return '동영상'
+        if getattr(message, 'voice', None):
+            return '음성'
+        if getattr(message, 'sticker', None):
+            return '스티커'
         return '파일'
-    if isinstance(getattr(message, 'media', None), types.MessageMediaPoll):
+    if isinstance(media, types.MessageMediaPoll):
         return '투표'
-    if getattr(message, 'media', None) and not isinstance(message.media, types.MessageMediaWebPage):
+    if media and not isinstance(media, types.MessageMediaWebPage):
         return '미디어'
     return None
 
 
 def attachment_metadata(message) -> dict[str, str] | None:
-    if getattr(message, 'photo', None):
+    media = getattr(message, 'media', None)
+    if isinstance(media, types.MessageMediaPhoto) and getattr(media, 'photo', None):
         return {'kind': 'photo', 'label': '사진'}
-    if getattr(message, 'video', None):
-        return {'kind': 'video', 'label': '동영상'}
-    file = getattr(message, 'file', None)
-    if getattr(file, 'mime_type', None) == 'application/pdf':
-        return {'kind': 'pdf', 'label': 'PDF'}
+    if isinstance(media, types.MessageMediaDocument):
+        if getattr(message, 'video', None):
+            return {'kind': 'video', 'label': '동영상'}
+        document = getattr(media, 'document', None)
+        if getattr(document, 'mime_type', None) == 'application/pdf':
+            return {'kind': 'pdf', 'label': 'PDF'}
     return None
 
 

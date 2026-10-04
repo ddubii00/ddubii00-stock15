@@ -12,7 +12,8 @@ from datetime import date
 
 
 def message(mid, when, text='synthetic caption', entities=None):
-    return SimpleNamespace(id=mid, date=datetime.fromisoformat(when), message=text, sender=SimpleNamespace(first_name='합성', last_name='작성자'), entities=entities, fwd_from=object(), photo=object(), action=None, media=None)
+    media = types.MessageMediaPhoto(photo=types.PhotoEmpty(id=mid))
+    return SimpleNamespace(id=mid, date=datetime.fromisoformat(when), message=text, sender=SimpleNamespace(first_name='합성', last_name='작성자'), entities=entities, fwd_from=object(), photo=object(), action=None, media=media)
 
 
 def test_serialization_kst_caption_forward_and_safe_links():
@@ -31,13 +32,24 @@ def test_only_photo_pdf_and_video_receive_attachment_buttons():
     chat = Chat('-1001', '합성 방', 'channel', datetime.now(timezone.utc))
     pdf = message(2, '2026-10-02T15:01:00+00:00')
     pdf.photo, pdf.document, pdf.file = None, object(), SimpleNamespace(mime_type='application/pdf')
+    pdf.media = types.MessageMediaDocument(document=SimpleNamespace(mime_type='application/pdf'))
     video = message(3, '2026-10-02T15:01:00+00:00')
     video.photo, video.video = None, object()
+    video.media = types.MessageMediaDocument(document=object())
     generic = message(4, '2026-10-02T15:01:00+00:00')
     generic.photo, generic.document, generic.file = None, object(), SimpleNamespace(mime_type='application/zip')
+    generic.media = types.MessageMediaDocument(document=SimpleNamespace(mime_type='application/zip'))
     assert serialize_message(pdf, chat)['attachment'] == {'kind': 'pdf', 'label': 'PDF'}
     assert serialize_message(video, chat)['attachment'] == {'kind': 'video', 'label': '동영상'}
     assert serialize_message(generic, chat)['attachment'] is None
+
+
+def test_link_preview_thumbnail_does_not_receive_a_photo_button():
+    chat = Chat('-1001', '합성 방', 'channel', datetime.now(timezone.utc))
+    preview = message(5, '2026-10-02T15:01:00+00:00', 'https://example.com')
+    preview.media = types.MessageMediaWebPage(webpage=object())
+    preview.photo = object()  # Telethon exposes webpage thumbnails through Message.photo.
+    assert serialize_message(preview, chat)['attachment'] is None
 
 
 @pytest.mark.parametrize('order', ['asc', 'desc'])
