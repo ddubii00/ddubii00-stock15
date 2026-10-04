@@ -48,6 +48,7 @@ type Preview = { url: string; title: string | null; description: string | null; 
 
 function LinkPreview({ url, nativePreview }: { url: string; nativePreview?: Message['linkPreview'] }) {
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [thumbnail, setThumbnail] = useState<'hq' | 'mq' | 'unavailable'>('hq');
   const videoId = youtubeId(url);
   useEffect(() => {
     const controller = new AbortController();
@@ -58,9 +59,9 @@ function LinkPreview({ url, nativePreview }: { url: string; nativePreview?: Mess
   }, [url]);
   const title = nativePreview?.title || preview?.title;
   const description = nativePreview?.description || preview?.description;
-  const image = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : preview?.image;
-  if (!title && !description && !image) return null;
-  return <div className={`link-preview ${videoId ? 'youtube-preview' : ''}`}>{image && <a className="link-preview-image" href={url} onClick={openInWindow} aria-label={videoId ? 'YouTube에서 동영상 보기' : '기사 원문 보기'}><img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />{videoId && <span className="link-preview-play" aria-hidden="true">▶</span>}</a>}<a href={url} onClick={openInWindow} className="link-preview-copy"><strong>{title || new URL(url).hostname}</strong>{description && <span>{description}</span>}<small>{new URL(url).hostname}</small></a></div>;
+  const image = videoId ? thumbnail === 'unavailable' ? null : `https://i.ytimg.com/vi/${videoId}/${thumbnail}default.jpg` : preview?.image;
+  if (!title && !description && !videoId && !image) return null;
+  return <div className={`link-preview ${videoId ? 'youtube-preview' : ''}`}>{(image || videoId) && <a className="link-preview-image" href={url} onClick={openInWindow} aria-label={videoId ? 'YouTube에서 동영상 보기' : '기사 원문 보기'}>{image ? <img src={image} alt="" loading={videoId ? 'eager' : 'lazy'} referrerPolicy="no-referrer" onError={() => { if (videoId) setThumbnail(current => current === 'hq' ? 'mq' : 'unavailable'); }} /> : <span className="link-preview-image-unavailable">영상 썸네일을 불러올 수 없습니다</span>}{videoId && <span className="link-preview-play" aria-hidden="true">▶</span>}</a>}<a href={url} onClick={openInWindow} className="link-preview-copy"><strong>{title || new URL(url).hostname}</strong>{description && <span>{description}</span>}<small>{new URL(url).hostname}</small></a></div>;
 }
 
 export default function App({ demo }: { demo: boolean }) {

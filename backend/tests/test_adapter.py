@@ -91,6 +91,28 @@ def test_link_preview_reads_metadata_from_a_large_article_without_storing_it(mon
     assert result == {'url': 'https://example.com/article', 'title': 'Large article', 'description': 'Short summary', 'image': None}
 
 
+def test_youtube_preview_reads_video_description_beyond_normal_html_limit(monkeypatch):
+    async def public_host(_url):
+        return None
+
+    html = b'x' * (preview_module.MAX_HTML_BYTES + 20) + b'<meta property="og:title" content="Video title"><meta property="og:description" content="The beginning of the video description">'
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, headers={'content-type': 'text/html'}, content=html))
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(preview_module, 'require_public_host', public_host)
+    monkeypatch.setattr(preview_module.httpx, 'AsyncClient', lambda **kwargs: real_client(transport=transport, **kwargs))
+
+    result = asyncio.run(preview_module.LinkPreviewer().get('https://www.youtube.com/watch?v=dQw4w9WgXcQ'))
+    assert result['title'] == 'Video title'
+    assert result['description'] == 'The beginning of the video description'
+    assert preview_module.preview_byte_limit('https://evil-youtube.com/watch?v=dQw4w9WgXcQ') == preview_module.MAX_HTML_BYTES
+
+
+def test_unavailable_youtube_video_does_not_show_generic_site_description():
+    html = b'<title> - YouTube</title><meta name="description" content="Watch videos and listen to music on YouTube">'
+    result = parse_preview(html, 'https://www.youtube.com/watch?v=KijcFPIbtP0')
+    assert result == {'url': 'https://www.youtube.com/watch?v=KijcFPIbtP0', 'title': None, 'description': None, 'image': None}
+
+
 def test_byte_ranges_accept_video_player_requests():
     assert byte_range('bytes=2-4', 10) == (2, 4)
     assert byte_range('bytes=-3', 10) == (7, 9)

@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import httpx
 
 MAX_HTML_BYTES = 192 * 1024
+MAX_YOUTUBE_HTML_BYTES = 1024 * 1024
 MAX_REDIRECTS = 3
 
 
@@ -27,6 +28,14 @@ def normalized_url(value: str, *, require_https: bool = False) -> str | None:
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or '/', parsed.query, ''))
     except ValueError:
         return None
+
+
+def preview_byte_limit(url: str) -> int:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or '').lower()
+    if (host == 'youtube.com' or host.endswith('.youtube.com')) and (parsed.path == '/watch' or parsed.path.startswith(('/shorts/', '/live/'))):
+        return MAX_YOUTUBE_HTML_BYTES
+    return MAX_HTML_BYTES
 
 
 async def require_public_host(url: str):
@@ -101,6 +110,8 @@ def compact(value: str | None, limit: int) -> str | None:
 def parse_preview(html: bytes, final_url: str) -> dict[str, str | None]:
     parser = MetadataParser()
     parser.feed(html.decode('utf-8', errors='replace'))
+    if preview_byte_limit(final_url) == MAX_YOUTUBE_HTML_BYTES and not parser.meta.get('og:title'):
+        return {'url': final_url, 'title': None, 'description': None, 'image': None}
     title = compact(parser.meta.get('og:title') or parser.meta.get('twitter:title') or ''.join(parser.title_parts), 180)
     description = compact(parser.meta.get('og:description') or parser.meta.get('twitter:description') or parser.meta.get('description') or next(iter(parser.paragraphs), None), 360)
     raw_image = parser.meta.get('og:image') or parser.meta.get('twitter:image')
@@ -128,10 +139,11 @@ class LinkPreviewer:
                             continue
                         if response.status_code != 200 or 'html' not in response.headers.get('content-type', '').lower():
                             return None
+                        limit = preview_byte_limit(str(response.url))
                         chunks = bytearray()
                         async for chunk in response.aiter_bytes():
-                            chunks.extend(chunk[:MAX_HTML_BYTES - len(chunks)])
-                            if len(chunks) >= MAX_HTML_BYTES:
+                            chunks.extend(chunk[:limit - len(chunks)])
+                            if len(chunks) >= limit:
                                 break
                         preview = parse_preview(bytes(chunks), str(response.url))
                         if not preview['title'] and not preview['description'] and not preview['image']:
