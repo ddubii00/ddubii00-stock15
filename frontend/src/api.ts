@@ -6,7 +6,7 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public retryAfter = 0) { super(message); }
 }
 
-export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal, retryCsrf = true): Promise<T> {
   let response: Response;
   try {
     response = await fetch(apiUrl(path), {
@@ -22,6 +22,11 @@ export async function api<T>(path: string, method = 'GET', body?: unknown, signa
   try { data = await response.json(); }
   catch { throw new ApiError(response.status, '서버 응답을 읽을 수 없습니다. 잠시 후 다시 시도해 주세요.'); }
   const detail = typeof data === 'object' && data !== null && 'detail' in data && typeof data.detail === 'string' ? data.detail : '요청을 처리할 수 없습니다.';
+  if (!response.ok && retryCsrf && method !== 'GET' && response.status === 403 && detail === '인증 토큰을 확인해 주세요.') {
+    const session = await api<{ csrfToken: string }>('auth/session', 'GET', undefined, signal, false);
+    setCsrf(session.csrfToken);
+    return api<T>(path, method, body, signal, false);
+  }
   if (!response.ok) throw new ApiError(response.status, detail, Number(response.headers.get('Retry-After')) || 0);
   return data as T;
 }

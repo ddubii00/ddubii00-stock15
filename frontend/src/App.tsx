@@ -73,8 +73,9 @@ export default function App({ demo }: { demo: boolean }) {
 
   const fail = useCallback((cause: unknown) => {
     if (cause instanceof DOMException && cause.name === 'AbortError') return;
-    if (cause instanceof ApiError && cause.status === 401) { setLogged(false); setMessages([]); setSettings(null); settingsRef.current = null; setCsrf(''); }
+    if (cause instanceof ApiError && cause.status === 401) { setLogged(false); setMessages([]); setSettings(null); settingsRef.current = null; setCsrf(''); setError('로그인 시간이 만료되었습니다. 비밀번호를 다시 입력해 주세요.'); return; }
     if (cause instanceof ApiError && cause.retryAfter) { cooldownRef.current = Date.now() + cause.retryAfter * 1000; setRetryUntil(cooldownRef.current); }
+    if (cause instanceof ApiError && cause.status === 403 && cause.message === '인증 토큰을 확인해 주세요.') { setError('로그인 보안 확인에 실패했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.'); return; }
     setError(cause instanceof Error ? cause.message : '요청 중 오류가 발생했습니다.');
   }, []);
 
