@@ -15,6 +15,7 @@ from .auth import Auth
 from .config import Config
 from .db import Database
 from .feed import Feed
+from .link_preview import LinkPreviewer
 from .telegram import TelegramLimited, TelegramReader, TelegramUnavailable
 from .time_utils import today_kst
 from .telemoa import Telemoa, TelemoaUnavailable
@@ -51,6 +52,7 @@ def create_app(config: Config | None = None, telegram=None):
     reader = telegram if telegram is not None else TelegramReader(config)
     auth, feed = Auth(config, db), Feed(db, reader)
     telemoa = Telemoa()
+    previews = LinkPreviewer()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -60,7 +62,7 @@ def create_app(config: Config | None = None, telegram=None):
 
     app = FastAPI(title='Telegram Reader', docs_url=None, redoc_url=None, openapi_url=None, root_path=config.base_path, lifespan=lifespan)
     app.state.db, app.state.telegram, app.state.feed = db, reader, feed
-    app.state.telemoa = telemoa
+    app.state.telemoa, app.state.previews = telemoa, previews
 
     @app.middleware('http')
     async def privacy_headers(request, call_next):
@@ -72,7 +74,7 @@ def create_app(config: Config | None = None, telegram=None):
         response.headers['Pragma'] = 'no-cache'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         return response
 
@@ -100,6 +102,10 @@ def create_app(config: Config | None = None, telegram=None):
     @app.get('/api/insights/telemoa', dependencies=secured)
     async def insights(mode: Literal['latest', 'cumulative'] = 'latest'):
         return await telemoa.get(mode)
+
+    @app.get('/api/link-preview', dependencies=secured)
+    async def link_preview(url: Annotated[str, Query(min_length=8, max_length=2048)]):
+        return await previews.get(url) or {}
 
     @app.post('/api/auth/login')
     async def login(body: LoginBody, request: Request, response: Response):

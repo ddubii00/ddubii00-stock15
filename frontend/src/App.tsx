@@ -36,10 +36,38 @@ function openInWindow(event: ReactMouseEvent<HTMLAnchorElement>) {
 }
 
 function MessageText({ text, links }: { text: string; links: string[] }) {
-  return <div className="message-text">{text.split(/(https?:\/\/[^\s<>]+)/g).map((part, i) => {
+  const inlineLinks = text.match(/https?:\/\/[^\s<>]+/g) || [];
+  const previewLink = [...inlineLinks, ...links].map(httpUrl).find((link): link is string => Boolean(link));
+  return <><div className="message-text">{text.split(/(https?:\/\/[^\s<>]+)/g).map((part, i) => {
     const url = httpUrl(part);
     return url ? <a key={i} href={url} onClick={openInWindow}>{part}</a> : part;
-  })}{links.filter(link => !text.includes(link) && httpUrl(link)).map(link => <span key={link}><br /><a href={httpUrl(link)!} onClick={openInWindow}>{link}</a></span>)}</div>;
+  })}{links.filter(link => !text.includes(link) && httpUrl(link)).map(link => <span key={link}><br /><a href={httpUrl(link)!} onClick={openInWindow}>{link}</a></span>)}</div>{previewLink && <LinkPreview url={previewLink} />}</>;
+}
+
+type Preview = { url: string; title: string | null; description: string | null; image: string | null };
+
+function youtubeId(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const value = host === 'youtu.be' ? parts[0] : host.endsWith('youtube.com') ? parsed.searchParams.get('v') || (['shorts', 'embed', 'live'].includes(parts[0]) ? parts[1] : null) : null;
+    return value && /^[A-Za-z0-9_-]{11}$/.test(value) ? value : null;
+  } catch { return null; }
+}
+
+function LinkPreview({ url }: { url: string }) {
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const videoId = youtubeId(url);
+  useEffect(() => {
+    const controller = new AbortController();
+    api<Preview | Record<string, never>>(`link-preview?url=${encodeURIComponent(url)}`, 'GET', undefined, controller.signal).then(data => {
+      if ('url' in data && typeof data.url === 'string') setPreview(data as Preview);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [url]);
+  if (!preview && !videoId) return null;
+  return <div className="link-preview">{videoId ? <iframe title={preview?.title || 'YouTube 미리보기'} src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0`} loading="lazy" referrerPolicy="no-referrer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : preview?.image && <img src={preview.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}<a href={url} onClick={openInWindow} className="link-preview-copy"><strong>{preview?.title || new URL(url).hostname}</strong>{preview?.description && <span>{preview.description}</span>}<small>{new URL(url).hostname}</small></a></div>;
 }
 
 export default function App({ demo }: { demo: boolean }) {

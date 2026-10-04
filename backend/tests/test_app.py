@@ -16,7 +16,7 @@ PREFIX = '/stock15-7/api'
 
 @pytest.mark.parametrize('method,path,body', [
     ('GET', '/status', None), ('GET', '/chats', None), ('GET', '/messages?date=2026-10-03', None),
-    ('GET', '/settings', None), ('GET', '/messages/hidden', None), ('GET', '/insights/telemoa', None),
+    ('GET', '/settings', None), ('GET', '/messages/hidden', None), ('GET', '/insights/telemoa', None), ('GET', '/link-preview?url=https://example.com', None),
     ('PUT', '/settings/chats', {'chatIds': []}), ('PUT', '/settings/start-date', {'date': '2026-10-01'}),
     ('POST', '/messages/hide', {'chatId': '-1001', 'messageId': 2}),
     ('DELETE', '/messages/hide/-1001/2', None), ('DELETE', '/messages/hide-all', None), ('DELETE', '/settings/records', None),
