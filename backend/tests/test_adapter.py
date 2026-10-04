@@ -7,7 +7,7 @@ from telethon import errors
 from telethon.tl import types
 
 from backend.app.link_preview import normalized_url, parse_preview
-from backend.app.telegram import Chat, TelegramLimited, TelegramReader, serialize_message
+from backend.app.telegram import Chat, InvalidMediaRange, TelegramLimited, TelegramReader, byte_range, serialize_message
 from backend.app.time_utils import date_bounds
 from datetime import date
 
@@ -58,6 +58,13 @@ def test_link_preview_parses_metadata_without_accepting_private_urls():
     assert parse_preview(html, 'https://example.com/article') == {'url': 'https://example.com/article', 'title': 'Example headline', 'description': 'Summary', 'image': 'https://images.example.com/card.jpg'}
     assert normalized_url('http://127.0.0.1/private') is None
     assert normalized_url('https://example.com:8443/private') is None
+
+
+def test_byte_ranges_accept_video_player_requests():
+    assert byte_range('bytes=2-4', 10) == (2, 4)
+    assert byte_range('bytes=-3', 10) == (7, 9)
+    with pytest.raises(InvalidMediaRange):
+        byte_range('bytes=10-', 10)
 
 
 @pytest.mark.parametrize('order', ['asc', 'desc'])

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.config import Config
 from backend.app.main import create_app
-from backend.app.telegram import Chat, MediaDownload, Scan
+from backend.app.telegram import Chat, MediaDownload, Scan, byte_range
 
 
 class FakeTelegram:
@@ -63,14 +63,17 @@ class FakeTelegram:
                 valid.append(m)
         return Scan(valid, last, exited or len(raw) < limit, last_key)
 
-    async def media_stream(self, chat_id, message_id):
+    async def media_stream(self, chat_id, message_id, range_header=None):
         if chat_id not in self.chats or not any(item['messageId'] == message_id for item in self.messages.get(chat_id, [])):
             return None
+        data = b'%PDF-synthetic-attachment'
+        requested = byte_range(range_header, len(data))
+        start, end = requested or (0, len(data) - 1)
 
         async def chunks():
-            yield b'%PDF-synthetic-attachment'
+            yield data[start:end + 1]
 
-        return MediaDownload('PDF', 'synthetic.pdf', 'application/pdf', chunks())
+        return MediaDownload('PDF', 'synthetic.pdf', 'application/pdf', chunks(), len(data), start, end, requested is not None)
 
 
 @pytest.fixture

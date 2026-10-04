@@ -21,6 +21,10 @@ class TelegramLimited(Exception):
         self.seconds = max(1, seconds)
 
 
+class InvalidMediaRange(Exception):
+    pass
+
+
 @dataclass
 class Chat:
     chat_id: str
@@ -47,6 +51,34 @@ class MediaDownload:
     filename: str
     content_type: str
     chunks: AsyncIterator[bytes]
+    size: int | None = None
+    start: int = 0
+    end: int | None = None
+    partial: bool = False
+
+
+def byte_range(value: str | None, size: int | None) -> tuple[int, int] | None:
+    if not value:
+        return None
+    if not size or not value.startswith('bytes=') or ',' in value:
+        raise InvalidMediaRange()
+    start_text, separator, end_text = value[6:].partition('-')
+    if not separator or (not start_text and not end_text):
+        raise InvalidMediaRange()
+    try:
+        if start_text:
+            start = int(start_text)
+            end = int(end_text) if end_text else size - 1
+        else:
+            suffix = int(end_text)
+            if suffix <= 0:
+                raise ValueError
+            start, end = max(0, size - suffix), size - 1
+    except ValueError:
+        raise InvalidMediaRange() from None
+    if start < 0 or start >= size or end < start:
+        raise InvalidMediaRange()
+    return start, min(end, size - 1)
 
 
 def safe_url(value: str) -> str | None:
@@ -234,7 +266,7 @@ class TelegramReader:
             except (errors.RPCError, OSError, TimeoutError, ValueError):
                 raise TelegramUnavailable() from None
 
-    async def media_stream(self, chat_id: str, message_id: int) -> MediaDownload | None:
+    async def media_stream(self, chat_id: str, message_id: int, range_header: str | None = None) -> MediaDownload | None:
         """Read a Telegram attachment into the HTTP response only; never write a file."""
         chats = await self.dialogs()
         chat = chats.get(chat_id)
@@ -252,19 +284,31 @@ class TelegramReader:
             content_type = getattr(file, 'mime_type', None) or ('image/jpeg' if attachment['kind'] == 'photo' else 'application/octet-stream')
             extension = getattr(file, 'ext', None) or ('.jpg' if attachment['kind'] == 'photo' else '')
             filename = getattr(file, 'name', None) or f'telegram-{chat_id}-{message_id}{extension}'
+            size = int(getattr(file, 'size', 0) or 0) or None
+            requested = byte_range(range_header, size)
+            start, end = requested or (0, (size - 1 if size else None))
+            length = (end - start + 1) if end is not None else None
             async def chunks():
                 try:
                     async with self.semaphore:
                         async with asyncio.timeout(300):
-                            async for chunk in self.client.iter_download(message.media, request_size=64 * 1024):
-                                yield chunk
+                            remaining = length
+                            limit = (length + 64 * 1024 - 1) // (64 * 1024) + 1 if length else None
+                            async for chunk in self.client.iter_download(message.media, offset=start, limit=limit, request_size=64 * 1024, file_size=size):
+                                data = bytes(chunk)
+                                if remaining is not None:
+                                    if remaining <= 0:
+                                        break
+                                    data, remaining = data[:remaining], remaining - len(data)
+                                if data:
+                                    yield data
                 except errors.FloodWaitError as exc:
                     self.cooldown_until = time.monotonic() + exc.seconds
                     raise TelegramLimited(exc.seconds) from None
                 except (errors.RPCError, OSError, TimeoutError, ValueError):
                     raise TelegramUnavailable() from None
 
-            return MediaDownload(attachment['label'], filename, content_type, chunks())
+            return MediaDownload(attachment['label'], filename, content_type, chunks(), size, start, end, requested is not None)
         except errors.FloodWaitError as exc:
             self.cooldown_until = time.monotonic() + exc.seconds
             raise TelegramLimited(exc.seconds) from None

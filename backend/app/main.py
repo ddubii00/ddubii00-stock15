@@ -16,7 +16,7 @@ from .config import Config
 from .db import Database
 from .feed import Feed
 from .link_preview import LinkPreviewer
-from .telegram import TelegramLimited, TelegramReader, TelegramUnavailable
+from .telegram import InvalidMediaRange, TelegramLimited, TelegramReader, TelegramUnavailable
 from .time_utils import today_kst
 from .telemoa import Telemoa, TelemoaUnavailable
 
@@ -181,15 +181,23 @@ def create_app(config: Config | None = None, telegram=None):
         return await feed.page(date, order, chat_id, cursor, limit)
 
     @app.get('/api/media/{chat_id}/{message_id}', dependencies=secured)
-    async def media(chat_id: ChatId, message_id: Annotated[int, Field(gt=0, le=2147483647)]):
+    async def media(chat_id: ChatId, message_id: Annotated[int, Field(gt=0, le=2147483647)], request: Request):
         if chat_id not in db.settings()['selectedChatIds']:
             raise HTTPException(403, '선택된 대화방의 첨부 파일만 열 수 있습니다.')
-        download = await reader.media_stream(chat_id, message_id)
+        try:
+            download = await reader.media_stream(chat_id, message_id, request.headers.get('range'))
+        except InvalidMediaRange:
+            return Response(status_code=416, headers={'Content-Range': 'bytes */*'})
         if not download:
             raise HTTPException(404, '첨부 파일을 찾을 수 없습니다.')
         from urllib.parse import quote
         filename = quote(download.filename.replace('/', '_').replace('\\', '_'), safe='')
-        return StreamingResponse(download.chunks, media_type=download.content_type, headers={'Content-Disposition': f"inline; filename*=UTF-8''{filename}"})
+        headers = {'Content-Disposition': f"inline; filename*=UTF-8''{filename}", 'Accept-Ranges': 'bytes'}
+        if download.size and download.end is not None:
+            headers['Content-Length'] = str(download.end - download.start + 1)
+        if download.partial and download.size and download.end is not None:
+            headers['Content-Range'] = f'bytes {download.start}-{download.end}/{download.size}'
+        return StreamingResponse(download.chunks, status_code=206 if download.partial else 200, media_type=download.content_type, headers=headers)
 
     @app.post('/api/messages/hide', dependencies=secured)
     async def hide(body: HideBody):

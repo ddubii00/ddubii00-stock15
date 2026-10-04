@@ -96,6 +96,10 @@ def test_attachment_streams_to_browser_without_server_file(authenticated):
     assert download.content == b'%PDF-synthetic-attachment'
     assert download.headers['content-type'].startswith('application/pdf')
     assert download.headers['content-disposition'].startswith("inline; filename*=UTF-8''synthetic.pdf")
+    partial = client.get(PREFIX + '/media/-1001/3', headers={'Range': 'bytes=0-3'})
+    assert partial.status_code == 206 and partial.content == b'%PDF'
+    assert partial.headers['accept-ranges'] == 'bytes'
+    assert partial.headers['content-range'] == 'bytes 0-3/25'
     assert client.get(PREFIX + '/media/-1002/10').status_code == 403
     assert not any(path.name.startswith('synthetic') for path in config.db_path.parent.iterdir())
 
