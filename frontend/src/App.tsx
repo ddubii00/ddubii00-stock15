@@ -101,8 +101,9 @@ export default function App({ demo }: { demo: boolean }) {
     setSettings(previousState => JSON.stringify(previousState) === JSON.stringify(next) ? previousState : next);
   }, []);
 
-  const metadata = useCallback(async () => {
-    try { acceptSettings(await api<Settings>('settings')); } catch (cause) { fail(cause); }
+  const metadata = useCallback(async (quiet = false) => {
+    try { acceptSettings(await api<Settings>('settings')); }
+    catch (cause) { if (!quiet || cause instanceof ApiError && cause.status === 401) fail(cause); }
   }, [acceptSettings, fail]);
 
   useEffect(() => {
@@ -110,10 +111,9 @@ export default function App({ demo }: { demo: boolean }) {
     void metadata();
     api<Status>('status').then(setStatus).catch(fail);
     api<Chat[]>('chats').then(setChats).catch(fail);
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') void metadata(); }, 15000);
-    const focus = () => { void metadata(); };
+    const focus = () => { void metadata(true); };
     window.addEventListener('focus', focus);
-    return () => { clearInterval(timer); window.removeEventListener('focus', focus); requestRef.current?.abort(); };
+    return () => { window.removeEventListener('focus', focus); requestRef.current?.abort(); };
   }, [logged, metadata, fail]);
 
   const load = useCallback(async (nextCursor?: string) => {
